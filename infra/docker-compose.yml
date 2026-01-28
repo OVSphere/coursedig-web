@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: coursedig_pg
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: coursedig
+      POSTGRES_PASSWORD: coursedig_pw
+      POSTGRES_DB: coursedig_db
+    volumes:
+      - coursedig_pg_data:/var/lib/postgresql/data
+
+volumes:
+  coursedig_pg_data:
