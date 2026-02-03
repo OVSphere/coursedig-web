@@ -1,7 +1,9 @@
 generator client {
-  provider   = "prisma-client"
-  output     = "../src/generated/prisma"
-  engineType = "library"
+  provider      = "prisma-client"
+  output        = "../src/generated/prisma"
+  engineType    = "library"
+  // Add these for AWS Amplify's environment
+  binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
