@@ -1,10 +1,10 @@
 {
   "fees": [
-    { "courseSlug": "human-resource-management-level-7", "level": "LEVEL7", "amountPence": 100000 },
-    { "courseSlug": "international-business-law-leading-to-llm-level-7", "level": "LEVEL7", "amountPence": 100000 },
-    { "courseSlug": "organisational-psychology-and-business-level-7", "level": "LEVEL7", "amountPence": 100000 },
-    { "courseSlug": "project-management-level-7", "level": "LEVEL7", "amountPence": 100000 },
-    { "courseSlug": "strategic-management-and-leadership-level-7", "level": "LEVEL7", "amountPence": 100000 },
-    { "courseSlug": "strategic-sales-management-level-7", "level": "LEVEL7", "amountPence": 100000 }
+    { "courseSlug": "human-resource-management-level-7", "level": "LEVEL7", "amountPence": 220000 },
+    { "courseSlug": "international-business-law-leading-to-llm-level-7", "level": "LEVEL7", "amountPence": 220000 },
+    { "courseSlug": "organisational-psychology-and-business-level-7", "level": "LEVEL7", "amountPence": 220000 },
+    { "courseSlug": "project-management-level-7", "level": "LEVEL7", "amountPence": 220000 },
+    { "courseSlug": "strategic-management-and-leadership-level-7", "level": "LEVEL7", "amountPence": 220000 },
+    { "courseSlug": "strategic-sales-management-level-7", "level": "LEVEL7", "amountPence": 220000 }
   ]
 }

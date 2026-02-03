@@ -1,20 +1,20 @@
 {
   "fees": [
-    { "courseSlug": "accounting-and-business-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "business-management-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "cyber-security-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "entrepreneurship-and-management-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "health-and-social-care-management-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "human-resource-management-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "it-and-computing-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "it-and-e-commerce-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "it-and-networking-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "it-and-web-design-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "law-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "leadership-and-teamwork-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "logistics-and-supply-chain-management-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "marketing-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "psychology-level-45", "level": "LEVEL4_5", "amountPence": 100000 },
-    { "courseSlug": "tourism-and-hospitality-management-level-45", "level": "LEVEL4_5", "amountPence": 100000 }
+    { "courseSlug": "accounting-and-business-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "business-management-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "cyber-security-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "entrepreneurship-and-management-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "health-and-social-care-management-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "human-resource-management-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "it-and-computing-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "it-and-e-commerce-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "it-and-networking-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "it-and-web-design-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "law-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "leadership-and-teamwork-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "logistics-and-supply-chain-management-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "marketing-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "psychology-level-45", "level": "LEVEL4_5", "amountPence": 200000 },
+    { "courseSlug": "tourism-and-hospitality-management-level-45", "level": "LEVEL4_5", "amountPence": 200000 }
   ]
 }
