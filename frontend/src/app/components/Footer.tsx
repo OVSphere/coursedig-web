@@ -24,11 +24,57 @@ export default function Footer() {
           <div>
             <h4 className="text-sm font-semibold text-gray-900">Quick links</h4>
             <ul className="mt-4 space-y-2 text-sm text-gray-700">
-              <li><Link href="/courses" className="hover:text-[color:var(--color-brand)] hover:underline">All courses</Link></li>
-              <li><Link href="/apply" className="hover:text-[color:var(--color-brand)] hover:underline">Apply</Link></li>
-              <li><Link href="/scholarships" className="hover:text-[color:var(--color-brand)] hover:underline">Scholarships</Link></li>
-              <li><Link href="/enquiry" className="hover:text-[color:var(--color-brand)] hover:underline">Enquiry</Link></li>
-              <li><Link href="/login" className="hover:text-[color:var(--color-brand)] hover:underline">Login / Register</Link></li>
+              <li>
+                <Link
+                  href="/courses"
+                  className="hover:text-[color:var(--color-brand)] hover:underline"
+                >
+                  All courses
+                </Link>
+              </li>
+
+              {/* ✅ NEW: Tuition fees */}
+              <li>
+                <Link
+                  href="/tuition-fees"
+                  className="hover:text-[color:var(--color-brand)] hover:underline"
+                >
+                  Tuition fees
+                </Link>
+              </li>
+
+              <li>
+                <Link
+                  href="/apply"
+                  className="hover:text-[color:var(--color-brand)] hover:underline"
+                >
+                  Apply
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/scholarships"
+                  className="hover:text-[color:var(--color-brand)] hover:underline"
+                >
+                  Scholarships
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/enquiry"
+                  className="hover:text-[color:var(--color-brand)] hover:underline"
+                >
+                  Enquiry
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/login"
+                  className="hover:text-[color:var(--color-brand)] hover:underline"
+                >
+                  Login / Register
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -36,10 +82,38 @@ export default function Footer() {
           <div>
             <h4 className="text-sm font-semibold text-gray-900">Company</h4>
             <ul className="mt-4 space-y-2 text-sm text-gray-700">
-              <li><Link href="/about" className="hover:text-[color:var(--color-brand)] hover:underline">About us</Link></li>
-              <li><Link href="/contact" className="hover:text-[color:var(--color-brand)] hover:underline">Contact</Link></li>
-              <li><Link href="/privacy" className="hover:text-[color:var(--color-brand)] hover:underline">Privacy policy</Link></li>
-              <li><Link href="/terms" className="hover:text-[color:var(--color-brand)] hover:underline">Terms &amp; conditions</Link></li>
+              <li>
+                <Link
+                  href="/about"
+                  className="hover:text-[color:var(--color-brand)] hover:underline"
+                >
+                  About us
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/contact"
+                  className="hover:text-[color:var(--color-brand)] hover:underline"
+                >
+                  Contact
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/privacy"
+                  className="hover:text-[color:var(--color-brand)] hover:underline"
+                >
+                  Privacy policy
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/terms"
+                  className="hover:text-[color:var(--color-brand)] hover:underline"
+                >
+                  Terms &amp; conditions
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -50,7 +124,7 @@ export default function Footer() {
             </h4>
 
             <p className="mt-4 text-sm leading-6 text-gray-700">
-              Not sure which course is right for you?  
+              Not sure which course is right for you?
               Our admissions team can guide you.
             </p>
 
@@ -64,7 +138,7 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* Bottom strip (brand red, legal + trust) */}
+      {/* Bottom strip */}
       <div className="border-t border-red-700/30 bg-[color:var(--color-brand)]">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex flex-col gap-2 text-xs text-white/90 md:flex-row md:items-center md:justify-between">

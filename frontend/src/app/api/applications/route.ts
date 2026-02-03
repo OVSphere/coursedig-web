@@ -1,5 +1,4 @@
 // src/app/api/applications/route.ts
-
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
@@ -11,6 +10,9 @@ const AWS_REGION =
 
 const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL;
 const SES_ADMIN_EMAIL = process.env.SES_ADMIN_EMAIL;
+
+// ✅ DEV override so you can test while SES is still in sandbox
+const DEV_FORCE_EMAIL = process.env.DEV_FORCE_EMAIL; // e.g. ovsphereltd@gmail.com
 
 const ses = new SESClient({ region: AWS_REGION });
 
@@ -65,34 +67,59 @@ function parseDobToDate(
     dobDate.getUTCFullYear() !== yyyy ||
     dobDate.getUTCMonth() !== mm - 1 ||
     dobDate.getUTCDate() !== dd
-  ) return { dobDate: null, yob: null };
+  )
+    return { dobDate: null, yob: null };
 
   return { dobDate, yob: String(yyyy) };
 }
 
-async function generateAppRef(lastName: string, yob: string) {
+async function generateAppRef(
+  applicationType: "COURSE" | "SCHOLARSHIP",
+  lastName: string,
+  yob: string
+) {
   const dateKey = ymdKey(); // YYYYMMDD
   const surname = cleanSurname(lastName) || "SURNAME";
 
+  // ✅ Separate counters by application type
+  // e.g. 20260203-COURSE vs 20260203-SCHOLARSHIP
+  const counterKey = `${dateKey}-${applicationType}`;
+
   const counter = await prisma.applicationCounter.upsert({
-    where: { dateKey },
+    where: { dateKey: counterKey },
     update: { lastValue: { increment: 1 } },
-    create: { dateKey, lastValue: 1 },
+    create: { dateKey: counterKey, lastValue: 1 },
     select: { lastValue: true },
   });
 
   const seq = String(counter.lastValue).padStart(4, "0");
 
-  // Spec: APP-SURNAME-YOB-YYYYMMDD-SEQ
-  return `APP-${surname}-${yob}-${dateKey}-${seq}`;
+  // ✅ Prefix for scholarship refs
+  const prefix = applicationType === "SCHOLARSHIP" ? "SCHOLAR APP" : "APP";
+
+  // e.g. "SCHOLAR-APP-OKUNS-1985-20260203-0008"
+  return `${prefix}-${surname}-${yob}-${dateKey}-${seq}`;
 }
 
-async function sendEmail(to: string, subject: string, html: string, text: string) {
+// ✅ Upgraded helper:
+// - In dev: forces emails to DEV_FORCE_EMAIL (verified in SES)
+// - In dev: never throws if SES rejects (so application submission still works)
+// - In prod: normal behaviour (throws on SES failure)
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  text: string
+) {
   if (!SES_FROM_EMAIL) throw new Error("SES_FROM_EMAIL is not set");
+
+  const isProd = process.env.NODE_ENV === "production";
+
+  const finalTo = !isProd && DEV_FORCE_EMAIL ? DEV_FORCE_EMAIL : to;
 
   const cmd = new SendEmailCommand({
     Source: SES_FROM_EMAIL,
-    Destination: { ToAddresses: [to] },
+    Destination: { ToAddresses: [finalTo] },
     Message: {
       Subject: { Data: subject, Charset: "UTF-8" },
       Body: {
@@ -102,7 +129,23 @@ async function sendEmail(to: string, subject: string, html: string, text: string
     },
   });
 
-  await ses.send(cmd);
+  try {
+    await ses.send(cmd);
+
+    if (!isProd && DEV_FORCE_EMAIL) {
+      console.log(`DEV_EMAIL_OVERRIDE: originally "${to}" -> sent to "${finalTo}"`);
+    }
+  } catch (err) {
+    console.error("SES_SEND_ERROR:", err);
+
+    // ✅ never block application submission if email fails in dev
+    if (!isProd) {
+      console.warn("SES failed in dev. Application saved; email skipped.");
+      return;
+    }
+
+    throw err;
+  }
 }
 
 function minLen(s: string, n: number) {
@@ -116,12 +159,14 @@ function isEmailLike(email: string) {
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
-    if (!user) return NextResponse.json({ message: "Unauthorised" }, { status: 401 });
+    if (!user)
+      return NextResponse.json({ message: "Unauthorised" }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
 
     const applicationTypeRaw = String(body.applicationType ?? "COURSE").toUpperCase();
-    const applicationType = applicationTypeRaw === "SCHOLARSHIP" ? "SCHOLARSHIP" : "COURSE";
+    const applicationType: "COURSE" | "SCHOLARSHIP" =
+      applicationTypeRaw === "SCHOLARSHIP" ? "SCHOLARSHIP" : "COURSE";
 
     const courseName = String(body.courseName ?? "").trim();
     const otherCourseName = String(body.otherCourseName ?? "").trim();
@@ -188,10 +233,7 @@ export async function POST(req: Request) {
 
     // Attachments validation
     if (attachments.length > MAX_FILES) {
-      return NextResponse.json(
-        { message: `Max ${MAX_FILES} files allowed.` },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: `Max ${MAX_FILES} files allowed.` }, { status: 400 });
     }
 
     let totalBytes = 0;
@@ -224,7 +266,8 @@ export async function POST(req: Request) {
       }
     }
 
-    const appRef = await generateAppRef(lastName, yob);
+    // ✅ NEW: type-aware ref
+    const appRef = await generateAppRef(applicationType, lastName, yob);
 
     const created = await prisma.application.create({
       data: {
@@ -256,8 +299,7 @@ export async function POST(req: Request) {
       include: { attachments: true },
     });
 
-    const formLabel =
-      applicationType === "SCHOLARSHIP" ? "Scholarship Application" : "Course Application";
+    const formLabel = applicationType === "SCHOLARSHIP" ? "Scholarship Application" : "Course Application";
 
     const userSubject = `CourseDig ${formLabel} Received: ${appRef}`;
     const adminSubject = `New CourseDig ${formLabel}: ${appRef}`;
@@ -304,12 +346,14 @@ export async function POST(req: Request) {
       </div>
     `;
 
-    const canSend = Boolean(SES_FROM_EMAIL && SES_ADMIN_EMAIL);
+    const canSend = Boolean(SES_FROM_EMAIL && (SES_ADMIN_EMAIL || DEV_FORCE_EMAIL));
     if (canSend) {
       await sendEmail(email, userSubject, userHtml, userText);
-      await sendEmail(SES_ADMIN_EMAIL as string, adminSubject, adminHtml, adminText);
+
+      const adminTo = SES_ADMIN_EMAIL || DEV_FORCE_EMAIL!;
+      await sendEmail(adminTo, adminSubject, adminHtml, adminText);
     } else {
-      console.warn("SES_FROM_EMAIL / SES_ADMIN_EMAIL not set; skipping email send.");
+      console.warn("SES_FROM_EMAIL missing; skipping email send.");
     }
 
     return NextResponse.json(

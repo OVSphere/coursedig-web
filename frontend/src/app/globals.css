@@ -5,9 +5,9 @@
   --foreground: #171717;
 
   /* CourseDig brand */
-  --brand-primary: #C62828;      /* main red */
-  --brand-primary-dark: #A61E1E; /* hover */
-  --brand-primary-soft: #FDECEC; /* light background */
+  --brand-primary: #C62828;
+  --brand-primary-dark: #A61E1E;
+  --brand-primary-soft: #FDECEC;
 }
 
 @theme inline {
@@ -22,15 +22,12 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ✅ Force light rendering */
+html { color-scheme: light; }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
 }

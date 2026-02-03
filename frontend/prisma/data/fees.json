@@ -1,0 +1,29 @@
+{
+  "fees": [
+    {
+      "courseSlug": "healthcare-support-worker-hcsw",
+      "level": "VOCATIONAL",
+      "amountPence": 100000,
+      "isActive": true,
+      "notes": "Flexible instalments available"
+    },
+    {
+      "courseSlug": "business-management",
+      "level": "LEVEL3",
+      "amountPence": 100000,
+      "isActive": true
+    },
+    {
+      "courseSlug": "health-and-social-care-level-4-5",
+      "level": "LEVEL4_5",
+      "amountPence": 100000,
+      "isActive": true
+    },
+    {
+      "courseSlug": "strategic-management-leadership-level-7",
+      "level": "LEVEL7",
+      "amountPence": 100000,
+      "isActive": true
+    }
+  ]
+}

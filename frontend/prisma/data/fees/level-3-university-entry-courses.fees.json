@@ -1,0 +1,12 @@
+{
+  "fees": [
+    { "courseSlug": "accountancy-level-3", "level": "LEVEL3", "amountPence": 100000 },
+    { "courseSlug": "business-management-level-3", "level": "LEVEL3", "amountPence": 100000 },
+    { "courseSlug": "business-studies-level-3", "level": "LEVEL3", "amountPence": 100000 },
+    { "courseSlug": "employability-and-workplace-skills-level-3", "level": "LEVEL3", "amountPence": 100000 },
+    { "courseSlug": "engineering-level-3", "level": "LEVEL3", "amountPence": 100000 },
+    { "courseSlug": "health-and-social-care-level-3", "level": "LEVEL3", "amountPence": 100000 },
+    { "courseSlug": "information-technology-level-3", "level": "LEVEL3", "amountPence": 100000 },
+    { "courseSlug": "people-and-organisations-level-3", "level": "LEVEL3", "amountPence": 100000 }
+  ]
+}

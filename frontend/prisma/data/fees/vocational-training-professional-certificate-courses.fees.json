@@ -1,0 +1,39 @@
+{
+  "fees": [
+    {
+      "courseSlug": "business-analyst-ba-vocational",
+      "level": "VOCATIONAL",
+      "amountPence": 55000
+    },
+    {
+      "courseSlug": "cyber-security-fundamentals-vocational",
+      "level": "VOCATIONAL",
+      "amountPence": 55000
+    },
+    {
+      "courseSlug": "data-analytics-vocational",
+      "level": "VOCATIONAL",
+      "amountPence": 55000
+    },
+    {
+      "courseSlug": "healthcare-support-worker-hcsw-vocational",
+      "level": "VOCATIONAL",
+      "amountPence": 100000
+    },
+    {
+      "courseSlug": "health-and-social-care-vocational",
+      "level": "VOCATIONAL",
+      "amountPence": 100000
+    },
+    {
+      "courseSlug": "software-testing-automation-vocational",
+      "level": "VOCATIONAL",
+      "amountPence": 100000
+    },
+    {
+      "courseSlug": "software-testing-manual-qa-vocational",
+      "level": "VOCATIONAL",
+      "amountPence": 100000
+    }
+  ]
+}

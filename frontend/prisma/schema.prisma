@@ -44,7 +44,7 @@ model User {
 }
 
 model EmailVerificationToken {
-  id     String @id @default(cuid())
+  id String @id @default(cuid())
 
   userId String
   // ✅ FIX: single-line @relation (no multiline parentheses)
@@ -141,6 +141,9 @@ model Course {
   heroImage String?
   imageAlt  String?
 
+  // ✅ add this
+  fee CourseFee?
+
   published Boolean @default(false)
   sortOrder Int     @default(0)
 
@@ -149,4 +152,35 @@ model Course {
 
   @@index([published])
   @@index([category])
+}
+
+enum CourseLevel {
+  VOCATIONAL
+  LEVEL3
+  LEVEL4_5
+  LEVEL7
+}
+
+model CourseFee {
+  id String @id @default(cuid())
+
+  courseId String @unique
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  level CourseLevel
+
+  amountPence Int
+  currency    String @default("GBP")
+
+  payInFullAvailable       Boolean @default(true)
+  payInFullDiscountPercent Int     @default(10)
+
+  note     String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([level])
+  @@index([isActive])
 }

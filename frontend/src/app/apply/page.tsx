@@ -1,9 +1,8 @@
 // frontend/src/app/apply/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { COURSE_GROUPS } from "@/lib/courses";
 
 type PresignedUpload = {
@@ -17,18 +16,14 @@ type PresignedUpload = {
   sizeBytes: number;
 };
 
-type MeUser = {
-  id: string;
-  email: string;
-  fullName: string | null;
-  createdAt?: string;
-} | null;
-
 const ALLOWED = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 
 const MAX_FILES = 10;
 const MAX_TOTAL_BYTES = 100 * 1024 * 1024; // 100MB total
 const MAX_PER_FILE_BYTES = 10 * 1024 * 1024; // 10MB per file
+
+const PS_MIN = 50;
+const PS_MAX = 2000;
 
 function parseDobToISO(dob: string) {
   const m = dob.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -41,7 +36,6 @@ function parseDobToISO(dob: string) {
   const dt = new Date(Date.UTC(yyyy, mm - 1, dd));
   if (Number.isNaN(dt.getTime())) return null;
 
-  // prevent rollover (e.g., 32/01/2020)
   if (
     dt.getUTCFullYear() !== yyyy ||
     dt.getUTCMonth() !== mm - 1 ||
@@ -57,14 +51,11 @@ function isEmailLike(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
+function bytesToMB(bytes: number) {
+  return bytes / (1024 * 1024);
+}
+
 export default function ApplyPage() {
-  const router = useRouter();
-  const nextUrl = "/apply";
-
-  // Auth status
-  const [me, setMe] = useState<MeUser>(null);
-  const [meChecked, setMeChecked] = useState(false);
-
   // Course
   const [courseName, setCourseName] = useState<string>("");
   const [otherCourseName, setOtherCourseName] = useState<string>("");
@@ -84,37 +75,23 @@ export default function ApplyPage() {
   const [error, setError] = useState<string | null>(null);
   const [appRef, setAppRef] = useState<string | null>(null);
 
-  // Load auth state (/api/auth/me)
-  useEffect(() => {
-    let active = true;
-
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
-        const json = await res.json().catch(() => ({}));
-        if (!active) return;
-        setMe(json?.user ?? null);
-      } catch {
-        if (!active) return;
-        setMe(null);
-      } finally {
-        if (active) setMeChecked(true);
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
   const totalBytes = useMemo(() => files.reduce((s, f) => s + f.size, 0), [files]);
-  const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
+  const totalMB = useMemo(() => bytesToMB(totalBytes).toFixed(2), [totalBytes]);
 
   const dobIso = useMemo(() => parseDobToISO(dob), [dob]);
 
   const needsOtherCourse =
     courseName.trim().toUpperCase() === "OTHER" ||
     courseName.trim().toUpperCase() === "OTHERS";
+
+  // Inline validation states
+  const emailInvalid = email.trim().length > 0 && !isEmailLike(email);
+  const dobInvalid = dob.trim().length > 0 && dobIso === null;
+
+  const psLen = personalStatement.length;
+  const psTooShort = psLen > 0 && psLen < PS_MIN;
+  const psTooLong = psLen > PS_MAX;
+  const psRemaining = Math.max(0, PS_MAX - psLen);
 
   const formValid =
     courseName.trim().length > 0 &&
@@ -125,20 +102,13 @@ export default function ApplyPage() {
     isEmailLike(email) &&
     phone.trim().length > 0 &&
     countryOfResidence.trim().length > 0 &&
-    personalStatement.trim().length >= 50;
-
-  const looksLikeAuthError =
-    (error ?? "").toLowerCase().includes("logged in") ||
-    (error ?? "").toLowerCase().includes("log in");
-
-  const displayName = useMemo(() => {
-    if (!me) return "";
-    const name = (me.fullName || "").trim();
-    return name || me.email;
-  }, [me]);
+    psLen >= PS_MIN &&
+    psLen <= PS_MAX;
 
   function onFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? []);
+    if (!selected.length) return;
+
     const combined = [...files, ...selected].slice(0, MAX_FILES);
 
     for (const f of combined) {
@@ -160,6 +130,17 @@ export default function ApplyPage() {
 
     setError(null);
     setFiles(combined);
+
+    // Reset input value so selecting the same file again triggers onChange
+    e.target.value = "";
+  }
+
+  function removeFile(idx: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function clearAllFiles() {
+    setFiles([]);
   }
 
   async function presignBatch(filesToUpload: File[]): Promise<PresignedUpload[]> {
@@ -204,26 +185,10 @@ export default function ApplyPage() {
     );
   }
 
-  async function handleLogout() {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch {
-      // ignore
-    } finally {
-      router.push(`/login?next=${encodeURIComponent(nextUrl)}`);
-    }
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setAppRef(null);
-
-    // If we already know user is not logged in, do not proceed
-    if (meChecked && !me) {
-      setError("You must be logged in to submit an application.");
-      return;
-    }
 
     if (!formValid) {
       setError("Please complete all required fields correctly.");
@@ -242,12 +207,14 @@ export default function ApplyPage() {
     setIsSubmitting(true);
 
     try {
+      // 1) presign + upload (only if files exist)
       let uploads: PresignedUpload[] = [];
       if (files.length > 0) {
         uploads = await presignBatch(files);
         await uploadToS3(uploads, files);
       }
 
+      // 2) submit application
       const submitRes = await fetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -278,9 +245,13 @@ export default function ApplyPage() {
       }
 
       const json = await submitRes.json().catch(() => ({}));
-      if (!submitRes.ok) throw new Error(json.message || "Application failed");
+      if (!submitRes.ok) {
+        // Help user when backend fails due to SES/email issues etc.
+        throw new Error(json.message || "Application submit failed.");
+      }
 
       setAppRef(json.appRef);
+      // Clear form after success
       setFiles([]);
       setPersonalStatement("");
     } catch (err: any) {
@@ -288,6 +259,51 @@ export default function ApplyPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  // ✅ When submitted, hide the form completely
+  if (appRef) {
+    return (
+      <main className="bg-white">
+        <section className="border-b bg-[color:var(--color-brand-soft)]">
+          <div className="mx-auto max-w-3xl px-6 py-12">
+            <h1 className="text-3xl font-bold text-gray-900">Application submitted</h1>
+            <p className="mt-2 text-sm text-gray-700">
+              Thanks — we’ve received your application and will contact you by email.
+            </p>
+          </div>
+        </section>
+
+        <section>
+          <div className="mx-auto max-w-3xl px-6 py-10">
+            <div className="rounded-2xl border border-green-200 bg-green-50 p-6">
+              <p className="font-semibold text-gray-900">Your reference</p>
+              <p className="mt-1 text-sm text-gray-700">
+                <span className="font-mono font-semibold">{appRef}</span>
+              </p>
+              <p className="mt-3 text-sm text-gray-600">
+                If you need to update anything, please quote the reference.
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  href="/"
+                  className="inline-flex items-center rounded-md bg-[color:var(--color-brand)] px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-95"
+                >
+                  Back to home →
+                </Link>
+                <Link
+                  href="/enquiry"
+                  className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-50"
+                >
+                  Send an enquiry
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -307,95 +323,20 @@ export default function ApplyPage() {
             .
           </p>
 
-          {/* Logged-in banner */}
-          {meChecked && me ? (
-            <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-5">
-              <p className="text-sm font-semibold text-gray-900">
-                Welcome back{displayName ? `, ${displayName}` : ""} — you’re logged in.
-              </p>
-              <p className="mt-1 text-sm text-gray-700">
-                You can submit your application below, or view your previous applications.
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <Link
-                  href="/my-applications"
-                  className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                >
-                  My applications
-                </Link>
-
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="inline-flex items-center rounded-md bg-[color:var(--color-brand)] px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-95"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Not logged-in prompt (better UX than waiting for an error) */}
-          {meChecked && !me ? (
-            <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-              <p className="text-sm font-semibold text-gray-900">
-                Please login to continue
-              </p>
-              <p className="mt-1 text-sm text-gray-700">
-                You need an account to submit an application. It only takes a minute.
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <Link
-                  href={`/login?next=${encodeURIComponent(nextUrl)}`}
-                  className="inline-flex items-center rounded-md bg-[color:var(--color-brand)] px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-95"
-                >
-                  Login →
-                </Link>
-                <Link
-                  href={`/register?next=${encodeURIComponent(nextUrl)}`}
-                  className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-50"
-                >
-                  Create account
-                </Link>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Helpful CTA if error suggests auth issue */}
-          {looksLikeAuthError && !(meChecked && !me) && (
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Link
-                href={`/login?next=${encodeURIComponent(nextUrl)}`}
-                className="inline-flex items-center rounded-md bg-[color:var(--color-brand)] px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-95"
-              >
-                Login to continue →
-              </Link>
-              <Link
-                href={`/register?next=${encodeURIComponent(nextUrl)}`}
-                className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-50"
-              >
-                Create account
-              </Link>
-            </div>
-          )}
+          <div className="mt-5 rounded-2xl border border-red-100 bg-white/70 p-5">
+            <p className="text-sm font-semibold text-gray-900">
+              You’re almost there — take the next step.
+            </p>
+            <p className="mt-1 text-sm text-gray-700">
+              Submitting your application helps us match you to the right pathway and guide you
+              through enrolment with clear next steps.
+            </p>
+          </div>
         </div>
       </section>
 
       <section>
         <div className="mx-auto max-w-3xl px-6 py-10 space-y-6">
-          {appRef && (
-            <div className="rounded-2xl border border-green-200 bg-green-50 p-6">
-              <p className="font-semibold text-gray-900">Application submitted</p>
-              <p className="mt-1 text-sm text-gray-700">
-                Your reference:{" "}
-                <span className="font-mono font-semibold">{appRef}</span>
-              </p>
-              <p className="mt-2 text-sm text-gray-600">We will contact you by email.</p>
-            </div>
-          )}
-
           {error && (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
               {error}
@@ -449,13 +390,12 @@ export default function ApplyPage() {
             {/* Applicant */}
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="block text-sm font-semibold text-gray-900">
-                  First name *
-                </label>
+                <label className="block text-sm font-semibold text-gray-900">First name *</label>
                 <input
                   className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
+                  autoComplete="given-name"
                 />
               </div>
 
@@ -467,6 +407,7 @@ export default function ApplyPage() {
                   className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
+                  autoComplete="family-name"
                 />
               </div>
 
@@ -475,41 +416,48 @@ export default function ApplyPage() {
                   Date of birth (DD/MM/YYYY) *
                 </label>
                 <input
-                  className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
+                  className={`mt-2 w-full rounded-md border bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:ring-2 ${
+                    dobInvalid
+                      ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                      : "border-gray-300 focus:border-[color:var(--color-brand)] focus:ring-[color:var(--color-brand-soft)]"
+                  }`}
                   value={dob}
                   onChange={(e) => setDob(e.target.value)}
                   placeholder="e.g. 06/05/2009"
                   inputMode="numeric"
                 />
-                {!dobIso && dob.trim() !== "" && (
-                  <p className="mt-1 text-xs text-red-600">
-                    Use DD/MM/YYYY (e.g. 06/05/2009)
-                  </p>
+                {dobInvalid && (
+                  <p className="mt-1 text-xs text-red-600">Use DD/MM/YYYY (e.g. 06/05/2009)</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900">
-                  Email *
-                </label>
+                <label className="block text-sm font-semibold text-gray-900">Email *</label>
                 <input
-                  className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
+                  className={`mt-2 w-full rounded-md border bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:ring-2 ${
+                    emailInvalid
+                      ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                      : "border-gray-300 focus:border-[color:var(--color-brand)] focus:ring-[color:var(--color-brand-soft)]"
+                  }`}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   inputMode="email"
+                  autoComplete="email"
                 />
+                {emailInvalid && (
+                  <p className="mt-1 text-xs text-red-600">Please enter a valid email address.</p>
+                )}
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900">
-                  Phone number *
-                </label>
+                <label className="block text-sm font-semibold text-gray-900">Phone number *</label>
                 <input
                   className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="e.g. +44..."
+                  autoComplete="tel"
                 />
               </div>
 
@@ -522,24 +470,50 @@ export default function ApplyPage() {
                   value={countryOfResidence}
                   onChange={(e) => setCountryOfResidence(e.target.value)}
                   placeholder="e.g. United Kingdom"
+                  autoComplete="country-name"
                 />
               </div>
             </div>
 
+            {/* Personal statement */}
             <div>
               <label className="block text-sm font-semibold text-gray-900">
                 Personal statement (in support of your application) *
               </label>
+              <p className="mt-1 text-xs text-gray-600">
+                Minimum {PS_MIN} characters • Maximum {PS_MAX} characters
+              </p>
+
               <textarea
-                className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
+                className={`mt-2 w-full rounded-md border bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:ring-2 ${
+                  psTooShort || psTooLong
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                    : "border-gray-300 focus:border-[color:var(--color-brand)] focus:ring-[color:var(--color-brand-soft)]"
+                }`}
                 rows={7}
                 value={personalStatement}
-                onChange={(e) => setPersonalStatement(e.target.value)}
-                placeholder="Minimum 50 characters"
+                onChange={(e) => {
+                  const next = e.target.value;
+                  if (next.length <= PS_MAX) setPersonalStatement(next);
+                }}
+                placeholder="Tell us why you’re applying and what you hope to achieve."
+                maxLength={PS_MAX}
               />
-              <div className="mt-2 text-xs text-gray-600">
-                {personalStatement.trim().length}/50 minimum
+
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className={psTooShort ? "text-red-600" : "text-gray-600"}>
+                  {psLen}/{PS_MIN} minimum
+                </span>
+                <span className={psRemaining === 0 ? "text-red-600 font-semibold" : "text-gray-600"}>
+                  {psRemaining} characters remaining
+                </span>
               </div>
+
+              {psTooShort && (
+                <p className="mt-1 text-xs text-red-600">
+                  Please write at least {PS_MIN} characters.
+                </p>
+              )}
             </div>
 
             {/* Attachments */}
@@ -550,16 +524,62 @@ export default function ApplyPage() {
               <p className="text-sm text-gray-600">
                 PDF/images only • max {MAX_FILES} files • max 10MB per file • max 100MB total
               </p>
-              <input type="file" multiple accept=".pdf,image/*" onChange={onFilesChange} />
-              <div className="text-sm text-gray-700">
-                Files: {files.length}/{MAX_FILES} • Total: {totalMB} MB
+
+              {/* Styled file picker so “Choose files…” is visible */}
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-50">
+                  Choose files
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,image/*"
+                    onChange={onFilesChange}
+                    className="hidden"
+                  />
+                </label>
+
+                <div className="text-sm text-gray-700">
+                  {files.length === 0 ? (
+                    <span className="text-gray-500">No files selected</span>
+                  ) : (
+                    <span>
+                      {files.length}/{MAX_FILES} selected • Total: {totalMB} MB
+                    </span>
+                  )}
+                </div>
+
+                {files.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllFiles}
+                    className="text-sm font-semibold text-red-700 hover:underline"
+                  >
+                    Remove all
+                  </button>
+                )}
               </div>
 
               {files.length > 0 && (
-                <ul className="text-sm list-disc pl-5 text-gray-700">
+                <ul className="mt-2 space-y-2">
                   {files.map((f, idx) => (
-                    <li key={idx}>
-                      {f.name} ({(f.size / (1024 * 1024)).toFixed(2)} MB)
+                    <li
+                      key={`${f.name}-${idx}`}
+                      className="flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-900">{f.name}</p>
+                        <p className="text-xs text-gray-600">
+                          {(f.size / (1024 * 1024)).toFixed(2)} MB • {f.type || "file"}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeFile(idx)}
+                        className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                      >
+                        Remove
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -568,9 +588,9 @@ export default function ApplyPage() {
 
             <button
               type="submit"
-              disabled={!formValid || isSubmitting || (meChecked && !me)}
+              disabled={!formValid || isSubmitting}
               className={`w-full rounded-md px-6 py-3 text-sm font-semibold text-white ${
-                !formValid || isSubmitting || (meChecked && !me)
+                !formValid || isSubmitting
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-[color:var(--color-brand)] hover:bg-[color:var(--color-brand-dark)]"
               }`}
@@ -578,7 +598,8 @@ export default function ApplyPage() {
               {isSubmitting ? "Submitting..." : "Submit application"}
             </button>
 
-            <p className="text-xs text-gray-500">
+            {/* Make it RED and visible */}
+            <p className="text-xs font-semibold text-red-700">
               By submitting this form, you confirm the information is accurate.
             </p>
           </form>
