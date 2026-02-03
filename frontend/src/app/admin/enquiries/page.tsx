@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -30,67 +31,94 @@ export default async function AdminEnquiriesPage({
   });
 
   return (
-    <main className="max-w-5xl mx-auto p-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Admin — Enquiries</h1>
-          <p className="text-sm text-gray-400">
-            Showing {enquiries.length} most recent enquiries
-          </p>
-        </div>
+    <main className="bg-white">
+      <section className="border-b bg-[color:var(--color-brand-soft)]">
+        <div className="mx-auto max-w-7xl px-6 py-10">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Admin — Enquiries</h1>
+              <p className="mt-1 text-sm text-gray-700">
+                Showing {enquiries.length} most recent enquiries
+              </p>
+            </div>
 
-        <form className="flex gap-2">
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="Search ref, name, email…"
-            className="w-full sm:w-80 border border-gray-700 bg-black/30 rounded px-3 py-2"
-          />
-          <button className="px-4 py-2 rounded bg-white text-black font-medium">
-            Search
-          </button>
-        </form>
-      </div>
+            <form className="flex gap-2">
+              <input
+                name="q"
+                defaultValue={q}
+                placeholder="Search ref, name, email…"
+                className="w-full sm:w-80 rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
+              />
+              <button className="rounded-md bg-[color:var(--color-brand)] px-4 py-3 text-sm font-semibold text-white hover:bg-[color:var(--color-brand-dark)]">
+                Search
+              </button>
+            </form>
+          </div>
 
-      <div className="border border-gray-800 rounded overflow-hidden">
-        <div className="grid grid-cols-12 gap-2 px-4 py-3 text-xs uppercase tracking-wide text-gray-400 border-b border-gray-800">
-          <div className="col-span-3">Ref</div>
-          <div className="col-span-3">Name</div>
-          <div className="col-span-3">Email</div>
-          <div className="col-span-3">Created</div>
-        </div>
-
-        {enquiries.length === 0 ? (
-          <div className="p-6 text-gray-400">No enquiries found.</div>
-        ) : (
-          enquiries.map((e) => (
-            <details
-              key={e.id}
-              className="border-b border-gray-900 px-4 py-3"
+          <div className="mt-4">
+            <Link
+              href="/"
+              className="text-sm font-semibold text-[color:var(--color-brand)] hover:underline"
             >
-              <summary className="grid grid-cols-12 gap-2 cursor-pointer">
-                <div className="col-span-3 font-mono text-sm">{e.enquiryRef}</div>
-                <div className="col-span-3">{e.fullName}</div>
-                <div className="col-span-3 text-gray-300">{maskEmail(e.email)}</div>
-                <div className="col-span-3 text-gray-400 text-sm">
-                  {new Date(e.createdAt).toLocaleString()}
-                </div>
-              </summary>
+              ← Back to site
+            </Link>
+          </div>
+        </div>
+      </section>
 
-              <div className="mt-3 p-3 rounded bg-white/5">
-                <div className="text-sm text-gray-300">
-                  <div><span className="text-gray-500">Email:</span> {e.email}</div>
-                  <div><span className="text-gray-500">Phone:</span> {e.phone || "-"}</div>
-                </div>
-                <div className="mt-3">
-                  <div className="text-gray-500 text-xs uppercase">Message</div>
-                  <pre className="whitespace-pre-wrap text-sm mt-1">{e.message}</pre>
-                </div>
-              </div>
-            </details>
-          ))
-        )}
-      </div>
+      <section>
+        <div className="mx-auto max-w-7xl px-6 py-10">
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="grid grid-cols-12 gap-2 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">
+              <div className="col-span-3">Ref</div>
+              <div className="col-span-3">Name</div>
+              <div className="col-span-3">Email</div>
+              <div className="col-span-3">Created</div>
+            </div>
+
+            {enquiries.length === 0 ? (
+              <div className="p-6 text-sm text-gray-600">No enquiries found.</div>
+            ) : (
+              enquiries.map((e) => (
+                <details key={e.id} className="border-t border-gray-200 px-4 py-3">
+                  <summary className="grid cursor-pointer grid-cols-12 gap-2">
+                    <div className="col-span-3 font-mono text-sm text-gray-900">
+                      {e.enquiryRef}
+                    </div>
+                    <div className="col-span-3 text-gray-900">{e.fullName}</div>
+                    <div className="col-span-3 text-gray-700">{maskEmail(e.email)}</div>
+                    <div className="col-span-3 text-sm text-gray-600">
+                      {new Date(e.createdAt).toLocaleString()}
+                    </div>
+                  </summary>
+
+                  <div className="mt-3 rounded-xl bg-gray-50 p-4">
+                    <div className="text-sm text-gray-700">
+                      <div>
+                        <span className="font-semibold text-gray-900">Email:</span>{" "}
+                        {e.email}
+                      </div>
+                      <div className="mt-1">
+                        <span className="font-semibold text-gray-900">Phone:</span>{" "}
+                        {e.phone || "-"}
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                        Message
+                      </div>
+                      <pre className="mt-2 whitespace-pre-wrap text-sm text-gray-800">
+                        {e.message}
+                      </pre>
+                    </div>
+                  </div>
+                </details>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

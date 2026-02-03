@@ -3,11 +3,21 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* CourseDig brand */
+  --brand-primary: #C62828;      /* main red */
+  --brand-primary-dark: #A61E1E; /* hover */
+  --brand-primary-soft: #FDECEC; /* light background */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --color-brand: var(--brand-primary);
+  --color-brand-dark: var(--brand-primary-dark);
+  --color-brand-soft: var(--brand-primary-soft);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

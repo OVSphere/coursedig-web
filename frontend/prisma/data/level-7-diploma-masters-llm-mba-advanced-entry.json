@@ -1,0 +1,80 @@
+[
+  {
+    "slug": "human-resource-management-level-7",
+    "title": "Human Resource Management",
+    "shortDescription": "Develop advanced people management and organisational capability.",
+    "overview": "This Level 7 Human Resource Management course builds strategic HR knowledge, employment practice, and leadership skills aligned to postgraduate study.",
+    "delivery": "Online / in-person (to be confirmed)",
+    "duration": "To be confirmed",
+    "entryRequirements": "Undergraduate degree or equivalent professional experience",
+    "startDatesNote": "Rolling enrolment",
+    "priceNote": "Pricing available on request.",
+    "heroImage": "/images/courses/level7/human-resource-management.jpg",
+    "imageAlt": "Human Resource Management course"
+  },
+  {
+    "slug": "international-business-law-leading-to-llm-level-7",
+    "title": "International Business Law leading to LLM",
+    "shortDescription": "Gain advanced legal knowledge for international business contexts.",
+    "overview": "This Level 7 course provides a strong foundation in international business law and prepares learners for progression to an LLM qualification.",
+    "delivery": "Online / in-person (to be confirmed)",
+    "duration": "To be confirmed",
+    "entryRequirements": "Undergraduate degree or equivalent professional experience",
+    "startDatesNote": "Rolling enrolment",
+    "priceNote": "Pricing available on request.",
+    "heroImage": "/images/courses/level7/international-business-law.jpg",
+    "imageAlt": "International Business Law course"
+  },
+  {
+    "slug": "organisational-psychology-and-business-level-7",
+    "title": "Organisational Psychology and Business",
+    "shortDescription": "Understand behaviour, motivation, and performance in organisations.",
+    "overview": "This Level 7 course explores psychological principles applied to business, leadership, and organisational effectiveness at postgraduate level.",
+    "delivery": "Online / in-person (to be confirmed)",
+    "duration": "To be confirmed",
+    "entryRequirements": "Undergraduate degree or equivalent professional experience",
+    "startDatesNote": "Rolling enrolment",
+    "priceNote": "Pricing available on request.",
+    "heroImage": "/images/courses/level7/organisational-psychology.jpg",
+    "imageAlt": "Organisational Psychology and Business course"
+  },
+  {
+    "slug": "project-management-level-7",
+    "title": "Project Management",
+    "shortDescription": "Build advanced project planning and delivery skills.",
+    "overview": "This Level 7 Project Management course equips learners with tools, methodologies, and leadership skills required for complex project environments.",
+    "delivery": "Online / in-person (to be confirmed)",
+    "duration": "To be confirmed",
+    "entryRequirements": "Undergraduate degree or equivalent professional experience",
+    "startDatesNote": "Rolling enrolment",
+    "priceNote": "Pricing available on request.",
+    "heroImage": "/images/courses/level7/project-management.jpg",
+    "imageAlt": "Project Management course"
+  },
+  {
+    "slug": "strategic-management-and-leadership-level-7",
+    "title": "Strategic Management and Leadership",
+    "shortDescription": "Advance leadership and strategic decision-making skills.",
+    "overview": "This Level 7 Strategic Management and Leadership course prepares learners for senior management roles and MBA or masters-level progression.",
+    "delivery": "Online / in-person (to be confirmed)",
+    "duration": "To be confirmed",
+    "entryRequirements": "Undergraduate degree or equivalent professional experience",
+    "startDatesNote": "Rolling enrolment",
+    "priceNote": "Pricing available on request.",
+    "heroImage": "/images/courses/level7/strategic-management.jpg",
+    "imageAlt": "Strategic Management and Leadership course"
+  },
+  {
+    "slug": "strategic-sales-management-level-7",
+    "title": "Strategic Sales Management",
+    "shortDescription": "Develop advanced sales strategy and commercial leadership skills.",
+    "overview": "This Level 7 course focuses on strategic sales planning, customer management, and commercial decision-making aligned to postgraduate study.",
+    "delivery": "Online / in-person (to be confirmed)",
+    "duration": "To be confirmed",
+    "entryRequirements": "Undergraduate degree or equivalent professional experience",
+    "startDatesNote": "Rolling enrolment",
+    "priceNote": "Pricing available on request.",
+    "heroImage": "/images/courses/level7/strategic-sales.jpg",
+    "imageAlt": "Strategic Sales Management course"
+  }
+]
