@@ -169,6 +169,19 @@
     "imageAlt": "Logistics and Supply Chain Management course"
   },
   {
+    "slug": "marketing-level-45",
+    "title": "Sales and Marketing",
+    "shortDescription": "Learn how to position products and sell effectively.",
+    "overview": "This Level 4 & 5 course covers marketing fundamentals, buyer behaviour, and sales approaches relevant to modern organisations.",
+    "delivery": "Online / in-person (to be confirmed)",
+    "duration": "To be confirmed",
+    "entryRequirements": "To be confirmed",
+    "startDatesNote": "Rolling enrolment",
+    "priceNote": "Pricing available on request.",
+    "heroImage": "/images/courses/level45/sales-marketing.jpg",
+    "imageAlt": "Sales and Marketing course"
+  },
+  {
     "slug": "psychology-level-45",
     "title": "Psychology",
     "shortDescription": "Explore behaviour, cognition, and psychological theories.",
@@ -180,19 +193,6 @@
     "priceNote": "Pricing available on request.",
     "heroImage": "/images/courses/level45/psychology.jpg",
     "imageAlt": "Psychology course"
-  },
-  {
-    "slug": "sales-and-marketing-level-45",
-    "title": "Sales and Marketing",
-    "shortDescription": "Learn how to position products and sell effectively.",
-    "overview": "This Level 4 & 5 course covers marketing fundamentals, buyer behaviour, and sales approaches relevant to modern organisations.",
-    "delivery": "Online / in-person (to be confirmed)",
-    "duration": "To be confirmed",
-    "entryRequirements": "To be confirmed",
-    "startDatesNote": "Rolling enrolment",
-    "priceNote": "Pricing available on request.",
-    "heroImage": "/images/courses/level45/sales-marketing.jpg",
-    "imageAlt": "Sales and Marketing course"
   },
   {
     "slug": "tourism-and-hospitality-management-level-45",

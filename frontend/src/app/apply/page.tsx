@@ -1,9 +1,11 @@
 // frontend/src/app/apply/page.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { COURSE_GROUPS } from "@/lib/courses";
+// ✅ CHANGE (CourseDig): import useMe to auto-fill identity fields
+import { useMe } from "@/lib/useMe";
 
 type PresignedUpload = {
   key?: string;
@@ -24,6 +26,16 @@ const MAX_PER_FILE_BYTES = 10 * 1024 * 1024; // 10MB per file
 
 const PS_MIN = 50;
 const PS_MAX = 2000;
+
+// ✅ CHANGE (CourseDig): convert ISO DOB -> DD/MM/YYYY (for existing form format)
+function isoToDDMMYYYY(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = String(d.getUTCFullYear());
+  return `${dd}/${mm}/${yyyy}`;
+}
 
 function parseDobToISO(dob: string) {
   const m = dob.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -56,6 +68,9 @@ function bytesToMB(bytes: number) {
 }
 
 export default function ApplyPage() {
+  // ✅ CHANGE (CourseDig): load user identity for auto-fill + lock
+  const { user: me, loading: meLoading } = useMe();
+
   // Course
   const [courseName, setCourseName] = useState<string>("");
   const [otherCourseName, setOtherCourseName] = useState<string>("");
@@ -68,6 +83,42 @@ export default function ApplyPage() {
   const [phone, setPhone] = useState("");
   const [countryOfResidence, setCountryOfResidence] = useState("");
   const [personalStatement, setPersonalStatement] = useState("");
+
+  // ✅ CHANGE (CourseDig): prevent auto-fill from overwriting user edits
+  const [didAutofill, setDidAutofill] = useState(false);
+
+  // ✅ CHANGE (CourseDig): identity lock (do not allow editing if profile is locked + values exist)
+  const identityLocked = useMemo(() => {
+    if (!me) return false;
+
+    const hasCore =
+      !!me.firstName &&
+      !!me.lastName &&
+      !!me.phoneNumber &&
+      !!me.dateOfBirth &&
+      !!me.email;
+
+    return hasCore && !!me.profileLockedAt;
+  }, [me]);
+
+  // ✅ CHANGE (CourseDig): auto-fill from profile once (only if fields are empty)
+  useEffect(() => {
+    if (!me) return;
+    if (didAutofill) return;
+
+    if (!firstName && me.firstName) setFirstName(me.firstName);
+    if (!lastName && me.lastName) setLastName(me.lastName);
+    if (!phone && me.phoneNumber) setPhone(me.phoneNumber);
+    if (!email && me.email) setEmail(me.email);
+
+    if (!dob && me.dateOfBirth) {
+      const formatted = isoToDDMMYYYY(me.dateOfBirth);
+      if (formatted) setDob(formatted);
+    }
+    // countryOfResidence is not in profile yet, so do not auto-fill.
+
+    setDidAutofill(true);
+  }, [me, didAutofill, firstName, lastName, phone, email, dob]);
 
   // Attachments
   const [files, setFiles] = useState<File[]>([]);
@@ -246,7 +297,6 @@ export default function ApplyPage() {
 
       const json = await submitRes.json().catch(() => ({}));
       if (!submitRes.ok) {
-        // Help user when backend fails due to SES/email issues etc.
         throw new Error(json.message || "Application submit failed.");
       }
 
@@ -323,6 +373,13 @@ export default function ApplyPage() {
             .
           </p>
 
+          {/* ✅ CHANGE (CourseDig): show info when identity is locked */}
+          {me && !meLoading && identityLocked ? (
+            <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+              Your personal details are pulled from your profile and can only be changed by a Super Admin.
+            </div>
+          ) : null}
+
           <div className="mt-5 rounded-2xl border border-red-100 bg-white/70 p-5">
             <p className="text-sm font-semibold text-gray-900">
               You’re almost there — take the next step.
@@ -396,6 +453,8 @@ export default function ApplyPage() {
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   autoComplete="given-name"
+                  // ✅ CHANGE (CourseDig): lock identity fields when profileLockedAt is set
+                  disabled={identityLocked}
                 />
               </div>
 
@@ -408,6 +467,8 @@ export default function ApplyPage() {
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   autoComplete="family-name"
+                  // ✅ CHANGE (CourseDig)
+                  disabled={identityLocked}
                 />
               </div>
 
@@ -425,6 +486,8 @@ export default function ApplyPage() {
                   onChange={(e) => setDob(e.target.value)}
                   placeholder="e.g. 06/05/2009"
                   inputMode="numeric"
+                  // ✅ CHANGE (CourseDig)
+                  disabled={identityLocked}
                 />
                 {dobInvalid && (
                   <p className="mt-1 text-xs text-red-600">Use DD/MM/YYYY (e.g. 06/05/2009)</p>
@@ -444,6 +507,8 @@ export default function ApplyPage() {
                   placeholder="you@example.com"
                   inputMode="email"
                   autoComplete="email"
+                  // ✅ CHANGE (CourseDig)
+                  disabled={identityLocked}
                 />
                 {emailInvalid && (
                   <p className="mt-1 text-xs text-red-600">Please enter a valid email address.</p>
@@ -458,6 +523,8 @@ export default function ApplyPage() {
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="e.g. +44..."
                   autoComplete="tel"
+                  // ✅ CHANGE (CourseDig)
+                  disabled={identityLocked}
                 />
               </div>
 
@@ -493,8 +560,8 @@ export default function ApplyPage() {
                 rows={7}
                 value={personalStatement}
                 onChange={(e) => {
-                  const next = e.target.value;
-                  if (next.length <= PS_MAX) setPersonalStatement(next);
+                  const nextVal = e.target.value;
+                  if (nextVal.length <= PS_MAX) setPersonalStatement(nextVal);
                 }}
                 placeholder="Tell us why you’re applying and what you hope to achieve."
                 maxLength={PS_MAX}
@@ -525,7 +592,6 @@ export default function ApplyPage() {
                 PDF/images only • max {MAX_FILES} files • max 10MB per file • max 100MB total
               </p>
 
-              {/* Styled file picker so “Choose files…” is visible */}
               <div className="flex flex-wrap items-center gap-3">
                 <label className="inline-flex cursor-pointer items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-50">
                   Choose files
@@ -598,7 +664,6 @@ export default function ApplyPage() {
               {isSubmitting ? "Submitting..." : "Submit application"}
             </button>
 
-            {/* Make it RED and visible */}
             <p className="text-xs font-semibold text-red-700">
               By submitting this form, you confirm the information is accurate.
             </p>

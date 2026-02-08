@@ -1,6 +1,12 @@
 // frontend/src/app/api/auth/me/route.ts
+// NOTE (CourseDig update - return identity fields safely)
+// ✅ Exposes identity/profile fields for UI auto-fill + lock behaviour
+// ✅ Still avoids exposing adminSecondFactorHash
+
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -16,7 +22,26 @@ export async function GET() {
           id: user.id,
           email: user.email,
           fullName: user.fullName,
-          createdAt: user.createdAt,
+          createdAt: user.createdAt.toISOString(),
+
+          emailVerifiedAt: user.emailVerifiedAt
+            ? user.emailVerifiedAt.toISOString()
+            : null,
+
+          isAdmin: !!user.isAdmin,
+          isSuperAdmin: !!user.isSuperAdmin,
+
+          // ✅ identity/profile fields
+          firstName: user.firstName ?? null,
+          lastName: user.lastName ?? null,
+          phoneNumber: user.phoneNumber ?? null,
+          dateOfBirth: user.dateOfBirth ? user.dateOfBirth.toISOString() : null,
+          profileLockedAt: user.profileLockedAt
+            ? user.profileLockedAt.toISOString()
+            : null,
+
+          // ✅ UI should use this boolean (do NOT expose hash)
+          hasAdminSecondFactor: !!user.hasAdminSecondFactor,
         },
       },
       { status: 200 }

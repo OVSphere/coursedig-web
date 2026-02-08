@@ -1,6 +1,16 @@
 {
   "fees": [
     {
+      "courseSlug": "artificial-intelligence-fundamentals",
+      "level": "VOCATIONAL",
+      "amountPence": 95000
+    },
+    {
+      "courseSlug": "aws-cloud-fundamentals",
+      "level": "VOCATIONAL",
+      "amountPence": 95000
+    },
+    {
       "courseSlug": "business-analyst-ba-vocational",
       "level": "VOCATIONAL",
       "amountPence": 95000
@@ -22,6 +32,11 @@
     },
     {
       "courseSlug": "health-and-social-care-vocational",
+      "level": "VOCATIONAL",
+      "amountPence": 75000
+    },
+	{
+      "courseSlug": "ielts-preparation",
       "level": "VOCATIONAL",
       "amountPence": 75000
     },

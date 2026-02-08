@@ -1,4 +1,4 @@
-// src/lib/auth.ts
+// frontend/src/lib/auth.ts
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -32,6 +32,17 @@ export async function verifyPassword(password: string, hash: string) {
   return bcrypt.compare(password, hash);
 }
 
+/**
+ * ✅ For "secondary admin password" (stored as adminSecondFactorHash).
+ */
+export async function hashAdminSecondFactor(secret: string) {
+  return bcrypt.hash(secret, 12);
+}
+
+export async function verifyAdminSecondFactor(secret: string, hash: string) {
+  return bcrypt.compare(secret, hash);
+}
+
 export async function createSession(userId: string) {
   const expiresAt = sessionExpiryDate();
 
@@ -63,6 +74,12 @@ export async function destroySession() {
   cookieStore.set(SESSION_COOKIE_NAME, "", buildClearSessionCookieOptions());
 }
 
+/**
+ * Returns the currently logged-in user (or null).
+ * ✅ Includes: isSuperAdmin, emailVerifiedAt, hasAdminSecondFactor
+ * ✅ CHANGE (CourseDig): includes identity fields used for auto-fill
+ * ❌ Does NOT expose adminSecondFactorHash
+ */
 export async function getCurrentUser() {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
@@ -73,7 +90,25 @@ export async function getCurrentUser() {
     select: {
       id: true,
       expiresAt: true,
-      user: { select: { id: true, email: true, fullName: true, createdAt: true } },
+      user: {
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          createdAt: true,
+          emailVerifiedAt: true,
+          isAdmin: true,
+          isSuperAdmin: true,
+          adminSecondFactorHash: true, // needed only to compute boolean
+
+          // ✅ CHANGE (CourseDig): new identity/profile fields (nullable for existing rows)
+          firstName: true,
+          lastName: true,
+          phoneNumber: true,
+          dateOfBirth: true,
+          profileLockedAt: true,
+        },
+      },
     },
   });
 
@@ -84,5 +119,24 @@ export async function getCurrentUser() {
     return null;
   }
 
-  return session.user;
+  const u = session.user;
+
+  // return a safe shape
+  return {
+    id: u.id,
+    email: u.email,
+    fullName: u.fullName,
+    createdAt: u.createdAt,
+    emailVerifiedAt: u.emailVerifiedAt,
+    isAdmin: u.isAdmin,
+    isSuperAdmin: u.isSuperAdmin,
+    hasAdminSecondFactor: !!u.adminSecondFactorHash,
+
+    // ✅ CHANGE (CourseDig): expose identity fields to server routes (safe)
+    firstName: u.firstName ?? null,
+    lastName: u.lastName ?? null,
+    phoneNumber: u.phoneNumber ?? null,
+    dateOfBirth: u.dateOfBirth ?? null,
+    profileLockedAt: u.profileLockedAt ?? null,
+  };
 }

@@ -3,10 +3,22 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
-import React, { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import React, { useEffect, useMemo, useState } from "react";
 
 type NavItem = { href: string; label: string };
+
+type MeResponse =
+  | { user: null }
+  | {
+      user: {
+        id: string;
+        email: string;
+        fullName: string | null;
+        createdAt: string;
+        isAdmin: boolean;
+      };
+    };
 
 const NAV: NavItem[] = [
   { href: "/courses", label: "Courses" },
@@ -60,16 +72,69 @@ function IconClose(props: React.SVGProps<SVGSVGElement>) {
 
 export default function Header() {
   const pathname = usePathname();
+  const router = useRouter();
+
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [me, setMe] = useState<MeResponse>({ user: null });
+  const [meLoaded, setMeLoaded] = useState(false);
+
+  const isAuthed = !!me.user;
+  const isAdmin = !!me.user?.isAdmin;
+
+  async function loadMe() {
+    try {
+      const res = await fetch("/api/auth/me", { cache: "no-store" });
+      const json = (await res.json()) as MeResponse;
+      setMe(json);
+    } catch {
+      setMe({ user: null });
+    } finally {
+      setMeLoaded(true);
+    }
+  }
+
+  // Load on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      if (cancelled) return;
+      await loadMe();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refetch on route change (so UI updates after login/logout)
+  useEffect(() => {
+    loadMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   const activeHref = useMemo(() => pathname ?? "/", [pathname]);
 
   const telHref = "tel:01613882338";
   const whatsappHref = "https://wa.me/447778208546";
 
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // ignore
+    } finally {
+      setMe({ user: null });
+      setMobileOpen(false);
+      router.push("/");
+      router.refresh();
+    }
+  }
+
   return (
     <header className="sticky top-0 z-50 border-b bg-white">
-      {/* Top bar (brand red) */}
+      {/* Top bar */}
       <div className="border-b border-red-700/30 bg-[color:var(--color-brand)] text-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-2">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
@@ -178,12 +243,54 @@ export default function Header() {
               );
             })}
 
-            <Link
-              href="/login"
-              className="text-sm font-semibold text-gray-900 hover:text-[color:var(--color-brand)]"
-            >
-              Login
-            </Link>
+            {/* ✅ Only render these links once /me has loaded (prevents flicker) */}
+            {!meLoaded ? null : (
+              <>
+                {/* ✅ Profile (only when logged in) */}
+                {isAuthed && (
+                  <Link
+                    href="/profile"
+                    className={cx(
+                      "relative text-sm font-semibold text-gray-900",
+                      "after:absolute after:-bottom-2 after:left-0 after:h-[2px] after:w-full after:origin-left after:scale-x-0 after:bg-[color:var(--color-brand)] after:transition-transform after:duration-200",
+                      "hover:after:scale-x-100",
+                      activeHref?.startsWith("/profile") &&
+                        "text-[color:var(--color-brand)] after:scale-x-100"
+                    )}
+                  >
+                    Profile
+                  </Link>
+                )}
+
+                {/* ✅ Admin link */}
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    className="text-sm font-semibold text-gray-900 hover:text-[color:var(--color-brand)]"
+                  >
+                    Admin
+                  </Link>
+                )}
+
+                {/* Auth links */}
+                {!isAuthed ? (
+                  <Link
+                    href="/login"
+                    className="text-sm font-semibold text-gray-900 hover:text-[color:var(--color-brand)]"
+                  >
+                    Login
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="text-sm font-semibold text-gray-900 hover:text-[color:var(--color-brand)]"
+                  >
+                    Logout
+                  </button>
+                )}
+              </>
+            )}
 
             <Link
               href="/apply"
@@ -223,13 +330,47 @@ export default function Header() {
                 </Link>
               ))}
 
-              <Link
-                href="/login"
-                onClick={() => setMobileOpen(false)}
-                className="rounded-md px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-              >
-                Login
-              </Link>
+              {!meLoaded ? null : (
+                <>
+                  {isAuthed && (
+                    <Link
+                      href="/profile"
+                      onClick={() => setMobileOpen(false)}
+                      className="rounded-md px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    >
+                      Profile
+                    </Link>
+                  )}
+
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setMobileOpen(false)}
+                      className="rounded-md px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    >
+                      Admin
+                    </Link>
+                  )}
+
+                  {!isAuthed ? (
+                    <Link
+                      href="/login"
+                      onClick={() => setMobileOpen(false)}
+                      className="rounded-md px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    >
+                      Login
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="rounded-md px-3 py-2 text-left text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    >
+                      Logout
+                    </button>
+                  )}
+                </>
+              )}
 
               <Link
                 href="/apply"

@@ -1,8 +1,10 @@
 // src/app/scholarships/apply/ScholarshipApplyClient.tsx
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+// ✅ CHANGE (CourseDig): import useMe to auto-fill identity fields
+import { useMe } from "@/lib/useMe";
 
 type UploadMeta = {
   fileName: string;
@@ -86,6 +88,16 @@ const COURSE_GROUPS: Array<{ title: string; options: string[] }> = [
   },
 ];
 
+// ✅ CHANGE (CourseDig): ISO DOB -> DD/MM/YYYY
+function isoToDDMMYYYY(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = String(d.getUTCFullYear());
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 function parseDobDDMMYYYY(dob: string) {
   const m = dob.trim().match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/);
   if (!m) return null;
@@ -109,6 +121,9 @@ function isEmailLike(v: string) {
 }
 
 export default function ScholarshipApplyClient() {
+  // ✅ CHANGE (CourseDig): load user identity for auto-fill + lock
+  const { user: me, loading: meLoading } = useMe();
+
   // course
   const [courseSelected, setCourseSelected] = useState("");
   const [otherCourseName, setOtherCourseName] = useState("");
@@ -132,6 +147,29 @@ export default function ScholarshipApplyClient() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [appRef, setAppRef] = useState<string | null>(null);
+
+  // ✅ CHANGE (CourseDig): lock identity fields when profile is locked + values exist
+  const identityLocked = useMemo(() => {
+    if (!me) return false;
+    const hasCore =
+      !!me.firstName && !!me.lastName && !!me.phoneNumber && !!me.dateOfBirth && !!me.email;
+    return hasCore && !!me.profileLockedAt;
+  }, [me]);
+
+  // ✅ CHANGE (CourseDig): auto-fill once if empty
+  useEffect(() => {
+    if (!me) return;
+
+    if (!firstName && me.firstName) setFirstName(me.firstName);
+    if (!lastName && me.lastName) setLastName(me.lastName);
+    if (!phone && me.phoneNumber) setPhone(me.phoneNumber);
+    if (!email && me.email) setEmail(me.email);
+
+    if (!dobInput && me.dateOfBirth) {
+      const formatted = isoToDDMMYYYY(me.dateOfBirth);
+      if (formatted) setDobInput(formatted);
+    }
+  }, [me, firstName, lastName, phone, email, dobInput]);
 
   const totalBytes = useMemo(() => files.reduce((s, f) => s + f.size, 0), [files]);
   const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
@@ -161,7 +199,6 @@ export default function ScholarshipApplyClient() {
   function onFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? []);
 
-    // Combine, cap by MAX_FILES
     const combined = [...files, ...selected].slice(0, MAX_FILES);
 
     for (const f of combined) {
@@ -184,7 +221,6 @@ export default function ScholarshipApplyClient() {
     setError(null);
     setFiles(combined);
 
-    // allow selecting same file again after remove
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -210,7 +246,6 @@ export default function ScholarshipApplyClient() {
     setIsSubmitting(true);
 
     try {
-      // 1) Presign URLs (batch)
       let uploads: UploadMeta[] = [];
       if (files.length) {
         const presignRes = await fetch("/api/applications/presign", {
@@ -236,7 +271,6 @@ export default function ScholarshipApplyClient() {
         }
       }
 
-      // 2) Upload to S3
       if (uploads.length) {
         await Promise.all(
           uploads.map(async (u, idx) => {
@@ -255,7 +289,6 @@ export default function ScholarshipApplyClient() {
         );
       }
 
-      // 3) Submit scholarship application
       const submitRes = await fetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -296,7 +329,6 @@ export default function ScholarshipApplyClient() {
     }
   }
 
-  // ✅ after submit, hide the form (as requested)
   if (appRef) {
     return (
       <main className="bg-[color:var(--color-brand-soft)]">
@@ -349,7 +381,6 @@ export default function ScholarshipApplyClient() {
     <main className="bg-[color:var(--color-brand-soft)]">
       <div className="mx-auto max-w-6xl px-6 py-10">
         <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
-          {/* LEFT: marketing / reassurance */}
           <section className="hidden lg:block">
             <div className="rounded-3xl border border-gray-200 bg-white p-7 shadow-sm">
               <h1 className="text-3xl font-bold text-gray-900">Scholarship Application</h1>
@@ -357,6 +388,13 @@ export default function ScholarshipApplyClient() {
                 This form is designed to be straightforward. Tell us your goal, the support you need,
                 and why this scholarship would help you progress.
               </p>
+
+              {/* ✅ CHANGE (CourseDig): show info when identity is locked */}
+              {me && !meLoading && identityLocked ? (
+                <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+                  Your personal details are pulled from your profile and can only be changed by a Super Admin.
+                </div>
+              ) : null}
 
               <div className="mt-6 grid gap-4">
                 <div className="rounded-2xl border border-red-100 bg-[color:var(--color-brand-soft)] p-5">
@@ -397,7 +435,6 @@ export default function ScholarshipApplyClient() {
             </div>
           </section>
 
-          {/* RIGHT: form */}
           <section>
             <div className="rounded-3xl border border-gray-200 bg-white p-7 shadow-sm">
               <div className="mb-5">
@@ -412,7 +449,6 @@ export default function ScholarshipApplyClient() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-5">
-                {/* course */}
                 <div>
                   <label className="text-sm font-semibold text-gray-900">What course are you applying for? *</label>
                   <select
@@ -451,7 +487,6 @@ export default function ScholarshipApplyClient() {
                   )}
                 </div>
 
-                {/* names */}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-sm font-semibold text-gray-900">First name *</label>
@@ -460,6 +495,8 @@ export default function ScholarshipApplyClient() {
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                       autoComplete="given-name"
+                      // ✅ CHANGE (CourseDig)
+                      disabled={identityLocked}
                     />
                     {firstName.trim() !== "" && firstName.trim().length < 2 && (
                       <p className="mt-2 text-xs text-red-600">Minimum 2 characters.</p>
@@ -473,6 +510,8 @@ export default function ScholarshipApplyClient() {
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
                       autoComplete="family-name"
+                      // ✅ CHANGE (CourseDig)
+                      disabled={identityLocked}
                     />
                     {lastName.trim() !== "" && lastName.trim().length < 2 && (
                       <p className="mt-2 text-xs text-red-600">Minimum 2 characters.</p>
@@ -480,7 +519,6 @@ export default function ScholarshipApplyClient() {
                   </div>
                 </div>
 
-                {/* dob + email */}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-sm font-semibold text-gray-900">Date of birth (DD/MM/YYYY) *</label>
@@ -490,6 +528,8 @@ export default function ScholarshipApplyClient() {
                       onChange={(e) => setDobInput(e.target.value)}
                       placeholder="e.g. 06/05/2009"
                       inputMode="numeric"
+                      // ✅ CHANGE (CourseDig)
+                      disabled={identityLocked}
                     />
                     {!dobParsed && dobInput.trim() !== "" && (
                       <p className="mt-2 text-xs text-red-600">Use DD/MM/YYYY (e.g. 06/05/2009)</p>
@@ -509,6 +549,8 @@ export default function ScholarshipApplyClient() {
                       placeholder="you@example.com"
                       inputMode="email"
                       autoComplete="email"
+                      // ✅ CHANGE (CourseDig)
+                      disabled={identityLocked}
                     />
                     {emailTouched && !emailOk && (
                       <p className="mt-2 text-xs text-red-600">Please enter a valid email.</p>
@@ -516,7 +558,6 @@ export default function ScholarshipApplyClient() {
                   </div>
                 </div>
 
-                {/* phone + country */}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-sm font-semibold text-gray-900">Phone number *</label>
@@ -526,6 +567,8 @@ export default function ScholarshipApplyClient() {
                       onChange={(e) => setPhone(e.target.value)}
                       inputMode="tel"
                       autoComplete="tel"
+                      // ✅ CHANGE (CourseDig)
+                      disabled={identityLocked}
                     />
                   </div>
 
@@ -541,7 +584,6 @@ export default function ScholarshipApplyClient() {
                   </div>
                 </div>
 
-                {/* statement */}
                 <div>
                   <div className="flex items-end justify-between gap-4">
                     <label className="text-sm font-semibold text-gray-900">
@@ -574,7 +616,6 @@ export default function ScholarshipApplyClient() {
                   </div>
                 </div>
 
-                {/* attachments */}
                 <div className="space-y-2">
                   <div className="flex items-end justify-between gap-3">
                     <label className="text-sm font-semibold text-gray-900">Attachments (optional)</label>
@@ -594,7 +635,6 @@ export default function ScholarshipApplyClient() {
                     PDF/images only • max {MAX_FILES} files • max 10MB per file • max 50MB total
                   </p>
 
-                  {/* Custom file picker */}
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <label
                       className="inline-flex cursor-pointer items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50"
@@ -647,7 +687,6 @@ export default function ScholarshipApplyClient() {
                   )}
                 </div>
 
-                {/* Red confirmation text */}
                 <p className="text-sm font-semibold text-red-700">
                   By submitting this form, you confirm the information is accurate.
                 </p>
@@ -664,7 +703,6 @@ export default function ScholarshipApplyClient() {
                   {isSubmitting ? "Submitting…" : "Submit scholarship application"}
                 </button>
 
-                {/* Mobile reassurance */}
                 <div className="mt-4 rounded-2xl border border-red-100 bg-[color:var(--color-brand-soft)] p-4 lg:hidden">
                   <p className="mt-1 text-sm text-gray-700">
                     If you don’t hear from us after 5 working days, please{" "}

@@ -1,3 +1,4 @@
+// prisma/seeds/fee-helpers.ts
 import { PrismaClient } from "../../src/generated/prisma/client";
 
 export type FeeRow = {
@@ -10,6 +11,14 @@ export type FeeRow = {
   note?: string;
   isActive?: boolean;
 };
+
+// ✅ NEW: fallback slug normaliser for old fee slugs like "...-vocational"
+function normaliseFeeCourseSlug(slug: string) {
+  const s = String(slug || "").trim();
+  if (!s) return s;
+  if (s.endsWith("-vocational")) return s.slice(0, -"-vocational".length);
+  return s;
+}
 
 export async function upsertFees(prisma: PrismaClient, feesInput: unknown) {
   const fees: FeeRow[] = Array.isArray(feesInput)
@@ -27,49 +36,68 @@ export async function upsertFees(prisma: PrismaClient, feesInput: unknown) {
   let skipped = 0;
 
   for (const row of fees) {
-    const course = await prisma.course.findUnique({
-      where: { slug: row.courseSlug },
-      select: { id: true },
-    });
-
-    if (!course) {
-      console.warn(`⚠️ Fee skipped — course not found for slug: ${row.courseSlug}`);
+    const originalSlug = String(row.courseSlug || "").trim();
+    if (!originalSlug) {
       skipped++;
       continue;
     }
 
-    const result = await prisma.courseFee.upsert({
+    // ✅ NEW: try exact slug first, then fallback (remove -vocational)
+    const candidateSlugs = [originalSlug];
+    const fallback = normaliseFeeCourseSlug(originalSlug);
+    if (fallback && fallback !== originalSlug) candidateSlugs.push(fallback);
+
+    let course: { id: string } | null = null;
+
+    for (const s of candidateSlugs) {
+      course = await prisma.course.findUnique({
+        where: { slug: s },
+        select: { id: true },
+      });
+      if (course) break;
+    }
+
+    if (!course) {
+      console.warn(`⚠️ Fee skipped — course not found for slug: ${originalSlug}`);
+      skipped++;
+      continue;
+    }
+
+    // ✅ Accurate created vs updated
+    const existingFee = await prisma.courseFee.findUnique({
       where: { courseId: course.id },
-      create: {
-        courseId: course.id,
-        level: row.level,
-        amountPence: row.amountPence,
-        currency: row.currency ?? "GBP",
-        payInFullAvailable: row.payInFullAvailable ?? true,
-        payInFullDiscountPercent: row.payInFullDiscountPercent ?? 10,
-        note: row.note ?? null,
-        isActive: row.isActive ?? true,
-      },
-      update: {
-        level: row.level,
-        amountPence: row.amountPence,
-        currency: row.currency ?? "GBP",
-        payInFullAvailable: row.payInFullAvailable ?? true,
-        payInFullDiscountPercent: row.payInFullDiscountPercent ?? 10,
-        note: row.note ?? null,
-        isActive: row.isActive ?? true,
-      },
+      select: { id: true },
     });
 
-    // Prisma doesn't tell you created vs updated directly; we can approximate:
-    // If it existed before, it was updated. We can detect by checking if createdAt == updatedAt is not safe.
-    // So we track based on try/catch instead? Keep it simple: count as updated always.
-    // Better: do findUnique before upsert.
-    // We'll do a quick existence check:
-
-    // (Already have course.id; now check if fee existed)
-    // NOTE: if you want accurate counts, move existence check above and branch create/update.
-    updated++;
+    if (existingFee) {
+      await prisma.courseFee.update({
+        where: { courseId: course.id },
+        data: {
+          level: row.level,
+          amountPence: row.amountPence,
+          currency: row.currency ?? "GBP",
+          payInFullAvailable: row.payInFullAvailable ?? true,
+          payInFullDiscountPercent: row.payInFullDiscountPercent ?? 10,
+          note: row.note ?? null,
+          isActive: row.isActive ?? true,
+        },
+      });
+      updated++;
+    } else {
+      await prisma.courseFee.create({
+        data: {
+          courseId: course.id,
+          level: row.level,
+          amountPence: row.amountPence,
+          currency: row.currency ?? "GBP",
+          payInFullAvailable: row.payInFullAvailable ?? true,
+          payInFullDiscountPercent: row.payInFullDiscountPercent ?? 10,
+          note: row.note ?? null,
+          isActive: row.isActive ?? true,
+        },
+      });
+      created++;
+    }
   }
 
   return { created, updated, skipped, read: fees.length };

@@ -1,101 +1,89 @@
-// src/app/verify-email/page.tsx
-"use client";
+// frontend/src/app/api/auth/verify-email/route.ts
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { hashVerificationToken } from "@/lib/emailVerification";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
+export const dynamic = "force-dynamic";
 
-export default function VerifyEmailPage() {
-  const sp = useSearchParams();
-  const router = useRouter();
+function json(message: string, status: number, extra?: Record<string, any>) {
+  return NextResponse.json({ message, ...(extra || {}) }, { status });
+}
 
-  const token = useMemo(() => sp.get("token") || "", [sp]);
-  const next = useMemo(() => sp.get("next") || "/apply", [sp]);
+export async function POST(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const rawToken = String(body.token ?? "").trim();
 
-  const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
-  const [message, setMessage] = useState<string>("Verifying your email…");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function run() {
-      if (!token) {
-        setStatus("error");
-        setMessage("Missing verification token.");
-        return;
-      }
-
-      try {
-        const res = await fetch("/api/auth/verify-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-
-        const json = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          if (!cancelled) {
-            setStatus("error");
-            setMessage(json.message || "Verification failed.");
-          }
-          return;
-        }
-
-        if (!cancelled) {
-          setStatus("ok");
-          setMessage("Email verified successfully. Redirecting you to login…");
-        }
-
-        // Give a tiny pause so user sees success message
-        setTimeout(() => {
-          router.push(`/login?next=${encodeURIComponent(next)}`);
-        }, 900);
-      } catch (e: any) {
-        if (!cancelled) {
-          setStatus("error");
-          setMessage(e?.message || "Verification failed.");
-        }
-      }
+    if (!rawToken) {
+      return json("Missing verification token.", 400, { code: "TOKEN_MISSING" });
     }
 
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [token, next, router]);
+    const tokenHash = hashVerificationToken(rawToken);
 
-  return (
-    <main className="min-h-[calc(100vh-140px)] bg-[color:var(--color-brand-soft)]">
-      <div className="mx-auto max-w-xl px-6 py-16">
-        <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
-          <h1 className="text-2xl font-bold text-gray-900">Email verification</h1>
+    const tokenRow = await prisma.emailVerificationToken.findUnique({
+      where: { tokenHash },
+      select: { userId: true, expiresAt: true },
+    });
 
-          <div
-            className={`mt-4 rounded-xl border p-4 text-sm ${
-              status === "ok"
-                ? "border-green-200 bg-green-50 text-green-800"
-                : status === "error"
-                ? "border-red-200 bg-red-50 text-red-700"
-                : "border-gray-200 bg-gray-50 text-gray-700"
-            }`}
-          >
-            {message}
-          </div>
+    // ✅ Neutral language (don’t reveal if token ever existed)
+    if (!tokenRow) {
+      return json("This verification link is invalid or has expired.", 400, {
+        code: "TOKEN_INVALID",
+      });
+    }
 
-          {status === "error" && (
-            <div className="mt-5 space-y-2 text-sm text-gray-700">
-              <p>
-                You can request a new verification email from the{" "}
-                <Link className="font-semibold text-[color:var(--color-brand)] hover:underline" href={`/login?next=${encodeURIComponent(next)}`}>
-                  login page
-                </Link>
-                .
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    </main>
-  );
+    // Expired token (delete it for cleanliness)
+    if (tokenRow.expiresAt.getTime() < Date.now()) {
+      await prisma.emailVerificationToken
+        .delete({ where: { tokenHash } })
+        .catch(() => {});
+      return json("This verification link is invalid or has expired.", 400, {
+        code: "TOKEN_EXPIRED",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: tokenRow.userId },
+      select: { id: true, emailVerifiedAt: true },
+    });
+
+    // ✅ Neutral language (don’t reveal user existence)
+    if (!user) {
+      await prisma.emailVerificationToken
+        .delete({ where: { tokenHash } })
+        .catch(() => {});
+      return json("This verification link is invalid or has expired.", 400, {
+        code: "TOKEN_INVALID",
+      });
+    }
+
+    // ✅ Idempotent: already verified => delete token and return OK
+    if (user.emailVerifiedAt) {
+      await prisma.emailVerificationToken
+        .delete({ where: { tokenHash } })
+        .catch(() => {});
+      return json("Email already verified. You can continue to login.", 200, {
+        verified: true,
+        alreadyVerified: true,
+        code: "ALREADY_VERIFIED",
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifiedAt: new Date() },
+      }),
+      prisma.emailVerificationToken.delete({ where: { tokenHash } }),
+    ]);
+
+    return json("Email verified successfully. You can continue to login.", 200, {
+      verified: true,
+      alreadyVerified: false,
+      code: "OK",
+    });
+  } catch (e) {
+    console.error("VERIFY_EMAIL_ERROR:", e);
+    return json("Verification failed.", 500, { code: "SERVER_ERROR" });
+  }
 }

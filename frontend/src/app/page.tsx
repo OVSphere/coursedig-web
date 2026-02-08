@@ -1,53 +1,71 @@
+// frontend/src/app/page.tsx
 import Image from "next/image";
 import Link from "next/link";
 import NewsletterForm from "./components/NewsletterForm";
-import { toCourseSlug } from "@/lib/courses";
+import PopularCourses from "./components/PopularCourses";
+import { getPrismaServer } from "@/lib/prisma-server";
 
-export default function Home() {
-  const featured = [
-    {
-      title: "Software Testing (Manual QA)",
-      desc: "Learn testing fundamentals, test cases, defect reporting, and real QA workflows.",
-    },
-    {
-      title: "Data Analytics",
-      desc: "Build core analytics skills using practical datasets and career-ready tools.",
-    },
-    {
-      title: "Healthcare Support Worker (HCSW)",
-      desc: "Develop essential knowledge and professional skills for care environments.",
-    },
-  ];
+function formatMoneyGBP(amountPence: number | null | undefined) {
+  if (amountPence == null) return null;
+  const pounds = amountPence / 100;
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    maximumFractionDigits: 0,
+  }).format(pounds);
+}
 
-  const level45Featured = [
-    {
-      title: "IT and Computing",
-      desc: "Build practical IT skills for university progression and in-demand digital roles.",
-    },
-    {
-      title: "Health & Social Care Management",
-      desc: "Develop leadership and care management skills for progression in health and social care.",
-    },
-    {
-      title: "Business Management",
-      desc: "Strengthen business, leadership, and operational skills for career progression.",
-    },
-  ];
+export const dynamic = "force-dynamic";
 
-  const level7Featured = [
-    {
-      title: "Project Management",
-      desc: "Build advanced project planning and delivery skills for senior roles.",
-    },
-    {
-      title: "International Business Law leading to LLM",
-      desc: "Gain advanced legal knowledge for international business contexts and LLM progression.",
-    },
-    {
-      title: "Strategic Management and Leadership",
-      desc: "Advance leadership and strategic decision-making skills for management roles.",
-    },
-  ];
+export default async function Home() {
+  const { prisma } = getPrismaServer();
+
+  const [vocational, level45, level7] = await Promise.all([
+    prisma.course.findMany({
+      where: { published: true, fee: { is: { level: "VOCATIONAL", isActive: true } } },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      take: 3,
+      include: { fee: true },
+    }),
+
+    prisma.course.findMany({
+      where: { published: true, fee: { is: { level: "LEVEL4_5", isActive: true } } },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      take: 3,
+      include: { fee: true },
+    }),
+
+    prisma.course.findMany({
+      where: { published: true, fee: { is: { level: "LEVEL7", isActive: true } } },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      take: 3,
+      include: { fee: true },
+    }),
+  ]);
+
+  const vocationalCards = vocational.map((c) => ({
+    title: c.title,
+    slug: c.slug,
+    shortDescription: c.shortDescription,
+    category: c.category,
+    priceLabel: c.fee?.amountPence ? formatMoneyGBP(c.fee.amountPence) : null,
+  }));
+
+  const level45Cards = level45.map((c) => ({
+    title: c.title,
+    slug: c.slug,
+    shortDescription: c.shortDescription,
+    category: c.category,
+    priceLabel: c.fee?.amountPence ? formatMoneyGBP(c.fee.amountPence) : null,
+  }));
+
+  const level7Cards = level7.map((c) => ({
+    title: c.title,
+    slug: c.slug,
+    shortDescription: c.shortDescription,
+    category: c.category,
+    priceLabel: c.fee?.amountPence ? formatMoneyGBP(c.fee.amountPence) : null,
+  }));
 
   return (
     <div className="bg-white">
@@ -166,169 +184,33 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FEATURED COURSES (existing) */}
-      <section>
-        <div className="mx-auto max-w-7xl px-6 py-14">
-          <div className="flex items-end justify-between gap-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                Popular courses
-              </h2>
-              <p className="mt-2 text-sm text-gray-600">
-                Explore a few of our most in-demand learning pathways.
-              </p>
-            </div>
-            <Link
-              href="/courses"
-              className="text-sm font-semibold text-[color:var(--color-brand)] hover:underline"
-            >
-              View all courses
-            </Link>
-          </div>
+      {/* DB-DRIVEN SECTIONS */}
+      <PopularCourses
+        title="Popular courses"
+        subtitle="Explore a few of our most in-demand learning pathways."
+        viewAllHref="/courses"
+        viewAllLabel="View all courses"
+        courses={vocationalCards}
+        variant="white"
+      />
 
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
-            {featured.map((c) => {
-              const slug = toCourseSlug(c.title);
-              return (
-                <div
-                  key={c.title}
-                  className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
-                >
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {c.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-gray-600">{c.desc}</p>
+      <PopularCourses
+        title="Level 4 & 5 courses"
+        subtitle="University first and second year entry routes."
+        viewAllHref="/courses/level-4-and-5-university-first-second-year-courses"
+        viewAllLabel="View Level 4 & 5 →"
+        courses={level45Cards}
+        variant="soft"
+      />
 
-                  <div className="mt-6 flex gap-3">
-                    <Link
-                      href={`/courses/${slug}`}
-                      className="inline-flex items-center justify-center rounded-md bg-[color:var(--color-brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[color:var(--color-brand-dark)]"
-                    >
-                      View details
-                    </Link>
-                    <Link
-                      href="/enquiry"
-                      className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                    >
-                      Enquire
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* LEVEL 4 & 5 FEATURED */}
-      <section className="border-t bg-[color:var(--color-brand-soft)]">
-        <div className="mx-auto max-w-7xl px-6 py-14">
-          <div className="flex items-end justify-between gap-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                Level 4 &amp; 5 courses
-              </h2>
-              <p className="mt-2 text-sm text-gray-700">
-                University first and second year entry routes.
-              </p>
-            </div>
-
-            <Link
-              href="/courses/level-4-and-5-university-first-second-year-courses"
-              className="text-sm font-semibold text-[color:var(--color-brand)] hover:underline"
-            >
-              View Level 4 &amp; 5 →
-            </Link>
-          </div>
-
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
-            {level45Featured.map((c) => {
-              const slug = toCourseSlug(c.title);
-              return (
-                <div
-                  key={c.title}
-                  className="rounded-2xl border border-red-100 bg-white p-6 shadow-sm"
-                >
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {c.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-gray-700">{c.desc}</p>
-
-                  <div className="mt-6 flex gap-3">
-                    <Link
-                      href={`/courses/${slug}`}
-                      className="inline-flex items-center justify-center rounded-md bg-[color:var(--color-brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[color:var(--color-brand-dark)]"
-                    >
-                      View details
-                    </Link>
-                    <Link
-                      href="/enquiry"
-                      className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                    >
-                      Enquire
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* LEVEL 7 FEATURED */}
-      <section className="border-t bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-14">
-          <div className="flex items-end justify-between gap-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                Level 7 diplomas
-              </h2>
-              <p className="mt-2 text-sm text-gray-600">
-                Advanced entry routes into Masters, MBA, and LLM programmes.
-              </p>
-            </div>
-
-            <Link
-              href="/courses/level-7-diploma-masters-llm-mba-advanced-entry"
-              className="text-sm font-semibold text-[color:var(--color-brand)] hover:underline"
-            >
-              View Level 7 →
-            </Link>
-          </div>
-
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
-            {level7Featured.map((c) => {
-              const slug = toCourseSlug(c.title);
-              return (
-                <div
-                  key={c.title}
-                  className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
-                >
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {c.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-gray-600">{c.desc}</p>
-
-                  <div className="mt-6 flex gap-3">
-                    <Link
-                      href={`/courses/${slug}`}
-                      className="inline-flex items-center justify-center rounded-md bg-[color:var(--color-brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[color:var(--color-brand-dark)]"
-                    >
-                      View details
-                    </Link>
-                    <Link
-                      href="/enquiry"
-                      className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                    >
-                      Enquire
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+      <PopularCourses
+        title="Level 7 diplomas"
+        subtitle="Advanced entry routes into Masters, MBA, and LLM programmes."
+        viewAllHref="/courses/level-7-diploma-masters-llm-mba-advanced-entry"
+        viewAllLabel="View Level 7 →"
+        courses={level7Cards}
+        variant="white"
+      />
 
       {/* NEWSLETTER */}
       <section className="border-t bg-gray-50">

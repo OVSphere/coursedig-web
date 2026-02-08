@@ -2,19 +2,27 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { slug: string } }
-) {
-  const slug = String(params.slug || "").trim();
+export const dynamic = "force-dynamic";
+
+type Ctx = {
+  params: Promise<{ slug: string }>;
+};
+
+function json(message: string, status: number) {
+  return NextResponse.json({ message }, { status });
+}
+
+export async function GET(_req: Request, ctx: Ctx) {
+  const { slug } = await ctx.params;
+  const s = String(slug || "").trim();
+
+  if (!s) return json("Course not found", 404);
 
   const course = await prisma.course.findFirst({
-    where: { slug, published: true },
+    where: { slug: s, published: true },
   });
 
-  if (!course) {
-    return NextResponse.json({ message: "Course not found" }, { status: 404 });
-  }
+  if (!course) return json("Course not found", 404);
 
   return NextResponse.json({ course }, { status: 200 });
 }

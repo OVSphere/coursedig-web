@@ -1,9 +1,14 @@
+// prisma/schema.prisma
+// NOTE (CourseDig update - Identity fields + profile lock prep + Newsletter)
+// - Added identity/profile fields to User (firstName, lastName, phoneNumber, dateOfBirth) for application auto-fill
+// - Added profileLockedAt to support read-only profile in UI (Super Admin-only edits)
+// - Added NewsletterSubscriber model for newsletter subscribers list + admin tooling
+// - Added audit action for Super Admin identity overrides
+// - Backwards compatible: identity fields are nullable for existing DB rows; enforce required in app-layer for new users
+//
+
 generator client {
-  provider      = "prisma-client"
-  // Remove the 'output' line to use default @prisma/client
-  // OR if you keep it, ensure you import from '../src/generated/prisma/client'
-  engineType    = "library"
-  binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -32,24 +37,54 @@ model EnquiryCounter {
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
+
+  // ✅ Existing
   fullName     String?
   passwordHash String
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
 
-  // ✅ FIX: your API uses this field, so Prisma must have it
+  // ✅ NEW (CourseDig): Identity Profile Fields (used for auto-fill + read-only profile UI)
+  // - Keep nullable for existing DB rows
+  // - Enforce required for new users in the app layer (registration flow)
+  // - Only Super Admin should be allowed to change these via admin routes
+  firstName    String?
+  lastName     String?
+  phoneNumber  String?
+  dateOfBirth  DateTime?
+
+  // ✅ NEW (CourseDig): Profile lock timestamp (set after profile creation / capture)
+  // When set, UI should treat identity fields as read-only (support message: "Super Admin only")
+  profileLockedAt DateTime?
+
+  // ✅ Email verification
   emailVerifiedAt DateTime?
+
+  // ✅ Admin access
+  isAdmin Boolean @default(false)
+
+  // ✅ Super Admin access (top-level)
+  isSuperAdmin Boolean @default(false)
+
+  // ✅ Secondary admin password (hashed)
+  adminSecondFactorHash String?
 
   sessions     Session[]
   applications Application[]
 
   emailVerificationTokens EmailVerificationToken[] @relation("UserEmailVerificationTokens")
+
+  // ✅ audit log relations
+  auditEvents AuthzAuditEvent[] @relation("AuditActor")
+
+  // ✅ resend auditing / rate-limit tracking
+  resendAttempts EmailVerificationResendAttempt[]
 }
 
 model EmailVerificationToken {
   id String @id @default(cuid())
 
   userId String
-  // ✅ FIX: single-line @relation (no multiline parentheses)
   user   User   @relation("UserEmailVerificationTokens", fields: [userId], references: [id], onDelete: Cascade)
 
   tokenHash String   @unique
@@ -57,6 +92,7 @@ model EmailVerificationToken {
   createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([expiresAt])
 }
 
 model Session {
@@ -125,12 +161,15 @@ model ApplicationCounter {
 }
 
 model Course {
-  id               String @id @default(cuid())
-  slug             String @unique
-  title            String
-  category         String
-  shortDescription String
-  overview         String
+  id    String @id @default(cuid())
+  slug  String @unique
+  title String
+
+  // ✅ Optional now
+  category         String?
+  shortDescription String?
+
+  overview String
 
   whoItsFor         String?
   whatYoullLearn    String?
@@ -143,7 +182,6 @@ model Course {
   heroImage String?
   imageAlt  String?
 
-  // ✅ add this
   fee CourseFee?
 
   published Boolean @default(false)
@@ -154,6 +192,11 @@ model Course {
 
   @@index([published])
   @@index([category])
+  
+  // ✅ NEW indexes for homepage queries
+  @@index([homePopularRank])
+  @@index([homeLevel45Rank])
+  @@index([homeLevel7Rank])
 }
 
 enum CourseLevel {
@@ -185,4 +228,102 @@ model CourseFee {
 
   @@index([level])
   @@index([isActive])
+}
+
+//
+// ✅ NEW (CourseDig): Newsletter subscribers table (Prisma source of truth)
+// - Use this instead of raw db.query newsletter_subscribers table to avoid mismatches
+// - Admin UI can LIST + SEND (no CRUD)
+// - Super Admin can LIST + SEND + DELETE (bulk/individual) and toggle active if you add that later
+//
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  fullName  String?
+  source    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+//
+// ✅ Audit Trail
+//
+enum AuditAction {
+  USER_CREATE
+  USER_UPDATE
+  USER_DELETE
+  USER_PROMOTE_ADMIN
+  USER_DEMOTE_ADMIN
+  USER_PROMOTE_SUPERADMIN
+  USER_DEMOTE_SUPERADMIN
+
+  // existing
+  ADMIN_SECOND_FACTOR_SET
+  ADMIN_SECOND_FACTOR_CLEARED
+
+  // ✅ NEW (CourseDig): Super Admin second factor events (if you use separate handling)
+  SUPERADMIN_SECOND_FACTOR_SET
+  SUPERADMIN_SECOND_FACTOR_CLEARED
+
+  COURSE_CREATE
+  COURSE_UPDATE
+  COURSE_DELETE
+  COURSE_PUBLISH_TOGGLE
+  COURSE_FEE_UPSERT
+
+  USER_EMAIL_VERIFIED_BY_USER
+  USER_EMAIL_VERIFIED_BY_ADMIN
+  VERIFICATION_EMAIL_RESENT
+
+  // ✅ NEW (CourseDig): Super Admin identity/profile override
+  USER_IDENTITY_FIELDS_UPDATED_BY_SUPERADMIN
+}
+
+model AuthzAuditEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  action AuditAction
+
+  actorUserId String
+  actor       User   @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  targetUserId   String?
+  targetCourseId String?
+
+  ipAddress String?
+  userAgent String?
+
+  before Json?
+  after  Json?
+  meta   Json?
+
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@index([targetCourseId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+//
+// ✅ NEW: resend verification rate-limit tracking
+//
+model EmailVerificationResendAttempt {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId String?
+  user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  email     String
+  ipAddress String?
+
+  @@index([createdAt])
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([userId, createdAt])
 }

@@ -37,38 +37,60 @@ export async function POST(req: Request) {
       );
     }
 
-    // Basic validation
+    // Basic validation (neutral wording: avoid enumeration)
     if (!isEmailLike(email) || !password) {
-      return NextResponse.json({ message: "Invalid email or password." }, { status: 400 });
+      return NextResponse.json(
+        { message: "Invalid email or password." },
+        { status: 400 }
+      );
     }
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, passwordHash: true, emailVerifiedAt: true },
+      select: {
+        id: true,
+        passwordHash: true,
+        emailVerifiedAt: true,
+        // you can select these later if the client needs it
+        // isAdmin: true,
+        // isSuperAdmin: true,
+      },
     });
 
     // Avoid user enumeration
     if (!user) {
-      return NextResponse.json({ message: "Invalid email or password." }, { status: 401 });
+      return NextResponse.json(
+        { message: "Invalid email or password." },
+        { status: 401 }
+      );
     }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) {
-      return NextResponse.json({ message: "Invalid email or password." }, { status: 401 });
-    }
-
-    // Block unverified users
-    if (!user.emailVerifiedAt) {
       return NextResponse.json(
-        { message: "Please verify your email before logging in.", code: "EMAIL_NOT_VERIFIED" },
-        { status: 403 }
+        { message: "Invalid email or password." },
+        { status: 401 }
       );
     }
 
+    // ✅ Allow login even if unverified
     await createSession(user.id);
 
-    const res = NextResponse.json({ success: true }, { status: 200 });
+    const verified = !!user.emailVerifiedAt;
+
+    const res = NextResponse.json(
+      {
+        success: true,
+        verified,
+        requiresVerification: !verified,
+      },
+      { status: 200 }
+    );
+
+    // ✅ Let the client know where it *wanted* to go
+    // Client should override redirect to /verify-email-gate if requiresVerification=true
     res.headers.set("X-Redirect-To", next);
+
     return res;
   } catch (e) {
     console.error("LOGIN_ERROR:", e);
