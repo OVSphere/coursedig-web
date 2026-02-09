@@ -16,7 +16,7 @@ export default function ScholarshipsPage() {
 
               <p className="mt-4 max-w-xl text-sm leading-6 text-gray-700">
                 If cost is a barrier, don’t let it stop you. Apply for a CourseDig scholarship
-                and tell us what you want to achieve — we’ll guide you through the next steps.
+                and tell us what you want to achieve, we’ll guide you through the next steps.
               </p>
 
               {/* Motivation highlight */}
@@ -25,7 +25,7 @@ export default function ScholarshipsPage() {
                   A quick note before you start
                 </p>
                 <p className="mt-2 text-sm text-gray-700">
-                  You don’t need perfect writing. What matters is clarity and honesty —
+                  You don’t need perfect writing. What matters is clarity and honesty,
                   your goals, your situation, and why support would help.
                 </p>
               </div>
@@ -97,7 +97,7 @@ export default function ScholarshipsPage() {
                   <li>Returning to learning after a break</li>
                 </ul>
                 <p className="mt-3 text-xs text-gray-500">
-                  If you’re unsure, you can still apply — we’ll advise you on what’s needed.
+                  If you’re unsure, you can still apply, we’ll advise you on what’s needed.
                 </p>
               </div>
 

@@ -15,8 +15,8 @@ export default function Footer() {
             </h3>
 
             <p className="mt-3 max-w-xs text-sm leading-6 text-gray-700">
-              Flexible, career-focused programmes designed to support
-              university progression and real-world outcomes.
+              Flexible, career focused programmes designed to support
+              university progression and real world outcomes.
             </p>
           </div>
 

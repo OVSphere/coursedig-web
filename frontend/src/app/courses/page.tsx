@@ -27,7 +27,7 @@ const CATEGORY_CARDS: CategoryCard[] = [
     key: "vocational",
     title: "Vocational Training / Professional Certificate Courses",
     subtitle:
-      "Short, practical programmes designed to help you gain job-ready skills quickly.",
+      "Short, practical programmes designed to help you gain job ready skills quickly.",
     route: "/courses/vocational-training-professional-certificate-courses",
     audience:
       "Best for career starters, career changers, and professional upskilling.",
@@ -402,7 +402,7 @@ export default function AllCoursesPage() {
             <div>
               <p className="text-sm font-semibold text-gray-900">Practical support</p>
               <p className="mt-1 text-sm text-gray-700">
-                Clear pathways, guidance, and next steps — from enquiry to enrolment.
+                Clear pathways, guidance, and next steps from enquiry to enrolment.
               </p>
             </div>
             <div>

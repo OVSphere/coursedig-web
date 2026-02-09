@@ -67,7 +67,7 @@ export default async function Home() {
 
               <p className="mt-4 max-w-xl text-lg leading-8 text-gray-700">
                 CourseDig offers practical training and support for learners
-                progressing into work or university — from IT and analytics to
+                progressing into work or university, from IT and analytics to
                 health and social care.
               </p>
 
@@ -99,24 +99,15 @@ export default async function Home() {
               </p>
             </div>
 
-            {/* LOGO / VISUAL */}
+            {/* RIGHT CARD (removed duplicate logo + brand name) */}
             <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200">
-              <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[color:var(--color-brand-soft)]">
-                  <Image
-                    src="/coursediglogo.png"
-                    alt="CourseDig logo"
-                    width={44}
-                    height={44}
-                    priority
-                  />
-                </div>
-                <div>
-                  <p className="text-lg font-semibold text-gray-900">CourseDig</p>
-                  <p className="text-sm text-gray-600">
-                    Training that is practical, structured, and career-focused.
-                  </p>
-                </div>
+              <div>
+                <p className="text-base font-semibold text-gray-900">
+                  Training that is practical, structured, and career focused.
+                </p>
+                <p className="mt-1 text-sm text-gray-600">
+                  Clear pathways, real support, and outcomes you can use.
+                </p>
               </div>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -170,7 +161,7 @@ export default async function Home() {
       {/* ✅ ONLY ONE COURSE SECTION NOW */}
       <PopularCourses
         title="Popular courses"
-        subtitle="Explore a few of our most in-demand learning pathways."
+        subtitle="Explore a few of our most in demand learning pathways."
         viewAllHref="/courses"
         viewAllLabel="View all courses"
         courses={popularCards}
@@ -186,7 +177,7 @@ export default async function Home() {
                 Get updates from CourseDig
               </h2>
               <p className="mt-2 text-sm text-gray-600">
-                New courses, scholarship updates, and enrolment windows — straight
+                New courses, scholarship updates, and enrolment windows, straight
                 to your inbox.
               </p>
             </div>

@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CourseDig | Education & Professional Training",
-  description: "Professional courses, certifications and career pathways.",
+  title: "CourseDig | University Pathways Education & Professional Training",
+  description: "Professional courses, certifications and university pathways.",
   icons: {
     // Browser tab favicon
     icon: "/favicon.ico",
