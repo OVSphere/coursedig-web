@@ -20,46 +20,29 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const { prisma } = getPrismaServer();
 
-  const [vocational, level45, level7] = await Promise.all([
-    prisma.course.findMany({
-      where: { published: true, fee: { is: { level: "VOCATIONAL", isActive: true } } },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-      take: 3,
-      include: { fee: true },
-    }),
+  // ✅ Homepage now uses ONLY the Admin-ranked Popular courses (1–6)
+  const popular = await prisma.course.findMany({
+    where: {
+      published: true,
+      homePopularRank: { not: null },
+    },
+    orderBy: [{ homePopularRank: "asc" }, { updatedAt: "desc" }],
+    take: 6,
+    include: { fee: true },
+  });
 
-    prisma.course.findMany({
-      where: { published: true, fee: { is: { level: "LEVEL4_5", isActive: true } } },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-      take: 3,
-      include: { fee: true },
-    }),
+  // ✅ Optional fallback (if nothing has been ranked yet)
+  const popularFinal =
+    popular.length > 0
+      ? popular
+      : await prisma.course.findMany({
+          where: { published: true },
+          orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }],
+          take: 6,
+          include: { fee: true },
+        });
 
-    prisma.course.findMany({
-      where: { published: true, fee: { is: { level: "LEVEL7", isActive: true } } },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-      take: 3,
-      include: { fee: true },
-    }),
-  ]);
-
-  const vocationalCards = vocational.map((c) => ({
-    title: c.title,
-    slug: c.slug,
-    shortDescription: c.shortDescription,
-    category: c.category,
-    priceLabel: c.fee?.amountPence ? formatMoneyGBP(c.fee.amountPence) : null,
-  }));
-
-  const level45Cards = level45.map((c) => ({
-    title: c.title,
-    slug: c.slug,
-    shortDescription: c.shortDescription,
-    category: c.category,
-    priceLabel: c.fee?.amountPence ? formatMoneyGBP(c.fee.amountPence) : null,
-  }));
-
-  const level7Cards = level7.map((c) => ({
+  const popularCards = popularFinal.map((c) => ({
     title: c.title,
     slug: c.slug,
     shortDescription: c.shortDescription,
@@ -184,31 +167,13 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* DB-DRIVEN SECTIONS */}
+      {/* ✅ ONLY ONE COURSE SECTION NOW */}
       <PopularCourses
         title="Popular courses"
         subtitle="Explore a few of our most in-demand learning pathways."
         viewAllHref="/courses"
         viewAllLabel="View all courses"
-        courses={vocationalCards}
-        variant="white"
-      />
-
-      <PopularCourses
-        title="Level 4 & 5 courses"
-        subtitle="University first and second year entry routes."
-        viewAllHref="/courses/level-4-and-5-university-first-second-year-courses"
-        viewAllLabel="View Level 4 & 5 →"
-        courses={level45Cards}
-        variant="soft"
-      />
-
-      <PopularCourses
-        title="Level 7 diplomas"
-        subtitle="Advanced entry routes into Masters, MBA, and LLM programmes."
-        viewAllHref="/courses/level-7-diploma-masters-llm-mba-advanced-entry"
-        viewAllLabel="View Level 7 →"
-        courses={level7Cards}
+        courses={popularCards}
         variant="white"
       />
 

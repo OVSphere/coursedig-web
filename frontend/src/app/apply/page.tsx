@@ -376,13 +376,13 @@ export default function ApplyPage() {
           {/* ✅ CHANGE (CourseDig): show info when identity is locked */}
           {me && !meLoading && identityLocked ? (
             <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
-              Your personal details are pulled from your profile and can only be changed by a Super Admin.
+              Your personal details are sourced from your profile and cannot be edited here. Please request a change via your Profile so Support can update your record..
             </div>
           ) : null}
 
           <div className="mt-5 rounded-2xl border border-red-100 bg-white/70 p-5">
             <p className="text-sm font-semibold text-gray-900">
-              You’re almost there — take the next step.
+              You’re almost there, take the next step.
             </p>
             <p className="mt-1 text-sm text-gray-700">
               Submitting your application helps us match you to the right pathway and guide you

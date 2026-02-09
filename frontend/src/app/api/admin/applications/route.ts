@@ -1,9 +1,7 @@
 // frontend/src/app/api/admin/applications/route.ts
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin";
-
-// ✅ CHANGE THIS import to match your project
-import { prisma } from "@/lib/prisma"; // e.g. "@/lib/prisma" or "@/lib/db"
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +26,10 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") || "").trim();
   const limitRaw = Number(url.searchParams.get("limit") || "50");
-  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
+  const limit = Number.isFinite(limitRaw)
+    ? Math.min(Math.max(limitRaw, 1), 200)
+    : 50;
 
-  // Simple search across appRef, email, courseName, firstName, lastName
   const where = q
     ? {
         OR: [
@@ -43,7 +42,7 @@ export async function GET(req: Request) {
       }
     : {};
 
-  const items = await prisma.application.findMany({
+  const rows = await prisma.application.findMany({
     where,
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -57,11 +56,24 @@ export async function GET(req: Request) {
       countryOfResidence: true,
       courseName: true,
       createdAt: true,
-      status: true, // if your schema has it; if not, remove this line
-      // If you want attachment counts later:
-      // _count: { select: { attachments: true } },
+      status: true,
+      _count: { select: { attachments: true } },
     },
   });
+
+  const items = rows.map((r) => ({
+    id: r.id,
+    applicationType: r.applicationType,
+    appRef: r.appRef,
+    firstName: r.firstName,
+    lastName: r.lastName,
+    email: r.email,
+    countryOfResidence: r.countryOfResidence,
+    courseName: r.courseName,
+    createdAt: r.createdAt,
+    status: r.status,
+    attachmentsCount: r._count?.attachments ?? 0,
+  }));
 
   return jsonOk({ items, count: items.length });
 }

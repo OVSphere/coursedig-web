@@ -1,6 +1,4 @@
 // frontend/src/app/components/PopularCourses.tsx
-// ✅ NEW (CourseDig): Section component to render a course grid
-
 import Link from "next/link";
 import CourseCard from "./CourseCard";
 
@@ -10,6 +8,10 @@ type CourseItem = {
   shortDescription?: string | null;
   category?: string | null;
   priceLabel?: string | null;
+
+  // ✅ NEW
+  imageSrc?: string | null;
+  imageAlt?: string | null;
 };
 
 type Props = {
@@ -29,8 +31,7 @@ export default function PopularCourses({
   courses,
   variant = "white",
 }: Props) {
-  const bg =
-    variant === "soft" ? "bg-[color:var(--color-brand-soft)]" : "bg-white";
+  const bg = variant === "soft" ? "bg-[color:var(--color-brand-soft)]" : "bg-white";
 
   return (
     <section className={variant === "soft" ? `border-t ${bg}` : bg}>
@@ -38,9 +39,7 @@ export default function PopularCourses({
         <div className="flex items-end justify-between gap-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
-            {subtitle ? (
-              <p className="mt-2 text-sm text-gray-700">{subtitle}</p>
-            ) : null}
+            {subtitle ? <p className="mt-2 text-sm text-gray-700">{subtitle}</p> : null}
           </div>
 
           {viewAllHref ? (
@@ -62,6 +61,8 @@ export default function PopularCourses({
               shortDescription={c.shortDescription}
               category={c.category}
               priceLabel={c.priceLabel}
+              imageSrc={c.imageSrc}
+              imageAlt={c.imageAlt}
             />
           ))}
         </div>

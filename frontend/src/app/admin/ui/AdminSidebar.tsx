@@ -75,7 +75,6 @@ export default function AdminSidebar() {
           Admin panel
         </p>
 
-        {/* Optional small “home” hint */}
         <Link
           href="/admin"
           className="text-xs font-semibold text-[color:var(--color-brand)] hover:underline"
@@ -98,7 +97,6 @@ export default function AdminSidebar() {
             + New course
           </Link>
 
-          {/* Newsletter should be visible to Admin + Super Admin */}
           {isAdminOrSuperAdmin && (
             <Link
               href="/admin/newsletter"
@@ -117,7 +115,6 @@ export default function AdminSidebar() {
         </p>
 
         <nav className="mt-2 grid gap-1">
-          {/* Dashboard first (better UX than alphabetical) */}
           <Link className={itemClass("/admin")} href="/admin">
             <span>Dashboard</span>
             {activePill("/admin")}
@@ -133,6 +130,17 @@ export default function AdminSidebar() {
             {activePill("/admin/courses")}
           </Link>
 
+          {/* ✅ NEW MENU ITEM (Admin + Super Admin): Popular courses homepage control */}
+          {isAdminOrSuperAdmin && (
+            <Link
+              className={itemClass("/admin/homepage-featured")}
+              href="/admin/homepage-featured"
+            >
+              <span>Popular courses (Homepage)</span>
+              {activePill("/admin/homepage-featured")}
+            </Link>
+          )}
+
           <Link className={itemClass("/admin/enquiries")} href="/admin/enquiries">
             <span>Enquiries</span>
             {activePill("/admin/enquiries")}
@@ -143,8 +151,6 @@ export default function AdminSidebar() {
             {activePill("/admin/fees")}
           </Link>
 
-          {/* ✅ Only show Newsletter in the list if you want it here too.
-              If you prefer ONLY the Quick Action button, remove this block. */}
           {isAdminOrSuperAdmin && (
             <Link className={itemClass("/admin/newsletter")} href="/admin/newsletter">
               <span>Newsletter</span>
@@ -154,7 +160,7 @@ export default function AdminSidebar() {
         </nav>
       </div>
 
-      {/* ✅ Admin-only (Super Admin) */}
+      {/* ✅ Super Admin only */}
       {isSuperAdmin && (
         <div className="mt-4 border-t pt-4">
           <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -170,7 +176,6 @@ export default function AdminSidebar() {
         </div>
       )}
 
-      {/* ✅ Exit */}
       <div className="mt-4 border-t pt-4">
         <Link
           className="inline-flex w-full items-center justify-center rounded-md px-3 py-2 text-sm font-semibold text-[color:var(--color-brand)] hover:bg-gray-50"

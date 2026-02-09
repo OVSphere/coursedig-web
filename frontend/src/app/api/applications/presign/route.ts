@@ -44,6 +44,8 @@ function jsonError(message: string, status = 400, extra?: Record<string, unknown
   return NextResponse.json({ message, ...(extra ?? {}) }, { status });
 }
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
@@ -60,7 +62,6 @@ export async function POST(req: Request) {
       }));
     }
 
-    // Important: if UI calls presign with empty list, return a clear 400 (not 500)
     if (!files.length) {
       return jsonError("No files provided.", 400);
     }
@@ -123,6 +124,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ uploads, bypass: true }, { status: 200 });
     }
 
+    /**
+     * ✅ IMPORTANT FIX (CourseDig):
+     * Do NOT include ContentDisposition (or checksum headers) in the PutObjectCommand for presign.
+     * If you include it, AWS signs that header; the browser PUT must then send the same header,
+     * which it typically does not — causing 403 and the browser shows "CORS Missing Allow Origin".
+     *
+     * We will set "download filename" later at download time (GET presign) using
+     * ResponseContentDisposition.
+     */
     const uploads = await Promise.all(
       files.map(async (f) => {
         const safeName = sanitizeFileName(f.fileName);
@@ -133,11 +143,13 @@ export async function POST(req: Request) {
           Bucket: bucket,
           Key: key,
           ContentType: f.mimeType,
-          // helps downloads keep the original filename
-          ContentDisposition: `attachment; filename="${safeName}"`,
+          // ❌ DO NOT add ContentDisposition here
+          // ❌ DO NOT add ChecksumAlgorithm here
+          // ❌ DO NOT add ACL here
         });
 
-        const url = await getSignedUrl(s3, cmd, { expiresIn: 60 * 10 }); // 10 mins
+        // ✅ keep short-lived
+        const url = await getSignedUrl(s3, cmd, { expiresIn: 60 * 5 }); // 5 mins
 
         return {
           fileName: f.fileName,
@@ -145,7 +157,7 @@ export async function POST(req: Request) {
           sizeBytes: f.sizeBytes,
           key,
           url,
-          // backward-compatible (some older client code expects these)
+          // backward-compatible
           s3Key: key,
           uploadUrl: url,
         };
@@ -155,9 +167,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ uploads }, { status: 200 });
   } catch (err) {
     console.error("PRESIGN_ERROR:", err);
-    return NextResponse.json(
-      { message: "Failed to create upload URLs." },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: "Failed to create upload URLs." }, { status: 500 });
   }
 }

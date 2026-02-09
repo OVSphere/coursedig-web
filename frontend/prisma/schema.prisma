@@ -187,13 +187,18 @@ model Course {
   published Boolean @default(false)
   sortOrder Int     @default(0)
 
+  // ✅ ADD THESE (this is what Prisma is missing)
+  homePopularRank Int?
+  homeLevel45Rank Int?
+  homeLevel7Rank  Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([published])
   @@index([category])
-  
-  // ✅ NEW indexes for homepage queries
+
+  // ✅ these indexes now make sense
   @@index([homePopularRank])
   @@index([homeLevel45Rank])
   @@index([homeLevel7Rank])

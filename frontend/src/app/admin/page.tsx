@@ -28,12 +28,38 @@ function Tile({
 }
 
 export default async function AdminHomePage() {
-  // still useful for future UI gates, even if not used here today
-  await requireAdmin();
+  const gate = await requireAdmin();
+
+  if (!("ok" in gate) || (gate as any)?.ok === false) {
+    return (
+      <main className="bg-white">
+        <section className="rounded-2xl border border-gray-200 bg-[color:var(--color-brand-soft)] p-6">
+          <h1 className="text-2xl font-bold text-gray-900">Admin dashboard</h1>
+          <p className="mt-1 text-sm text-gray-700">Not authorised.</p>
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-gray-700">
+            You must be logged in as an Admin or Super Admin to access this page.
+          </p>
+          <div className="mt-4">
+            <Link
+              href="/login"
+              className="inline-flex items-center rounded-md bg-[color:var(--color-brand)] px-4 py-2 text-sm font-semibold text-white hover:opacity-95"
+            >
+              Go to login →
+            </Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  const roles = (gate as any)?.roles;
+  const isAdminOrSuperAdmin = !!roles?.isAdminOrSuperAdmin;
 
   return (
     <main className="bg-white">
-      {/* ✅ Dashboard header (no action buttons) */}
       <section className="rounded-2xl border border-gray-200 bg-[color:var(--color-brand-soft)] p-6">
         <h1 className="text-2xl font-bold text-gray-900">Admin dashboard</h1>
         <p className="mt-1 text-sm text-gray-700">
@@ -63,6 +89,16 @@ export default async function AdminHomePage() {
             desc="Manage tuition fees and payment notes."
             href="/admin/fees"
           />
+
+          {/* ✅ NEW */}
+          {isAdminOrSuperAdmin && (
+            <Tile
+              title="Popular courses (Homepage)"
+              desc="Choose which courses appear in the Popular section and set their order."
+              href="/admin/homepage-featured"
+            />
+          )}
+
           <Tile
             title="Newsletter"
             desc="View subscribers and send newsletters (Admin can send; Super Admin can manage)."

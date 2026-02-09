@@ -392,7 +392,7 @@ export default function ScholarshipApplyClient() {
               {/* ✅ CHANGE (CourseDig): show info when identity is locked */}
               {me && !meLoading && identityLocked ? (
                 <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
-                  Your personal details are pulled from your profile and can only be changed by a Super Admin.
+                  Your personal details are sourced from your profile and cannot be edited here. Please request a change via your Profile so Support can update your record..
                 </div>
               ) : null}
 

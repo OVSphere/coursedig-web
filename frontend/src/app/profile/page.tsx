@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { useMe } from "@/lib/useMe";
+import MyApplicationsPanel from "./MyApplicationsPanel";
 
 function formatDob(iso: string | null | undefined) {
   if (!iso) return "";
@@ -18,7 +19,6 @@ function formatDateTime(iso: string | null | undefined) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  // Keep it simple + consistent (UTC)
   const dd = String(d.getUTCDate()).padStart(2, "0");
   const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
   const yyyy = String(d.getUTCFullYear());
@@ -48,9 +48,7 @@ export default function ProfilePage() {
         <div className="mx-auto max-w-3xl px-6 py-12">
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             <h1 className="text-2xl font-bold text-gray-900">Your profile</h1>
-            <p className="mt-2 text-sm text-gray-700">
-              You need to sign in to view your profile.
-            </p>
+            <p className="mt-2 text-sm text-gray-700">You need to sign in to view your profile.</p>
             <div className="mt-5">
               <Link
                 href="/login?next=/profile"
@@ -79,7 +77,7 @@ export default function ProfilePage() {
 
           {locked ? (
             <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
-              Your profile is locked. Any updates must be done by a Super Admin.
+              Your personal details are sourced from your profile and cannot be edited here. Please request a change via your Profile so Support can update your record..
             </div>
           ) : (
             <div className="mt-5 rounded-2xl border border-gray-200 bg-white/70 p-4 text-sm text-gray-700">
@@ -97,35 +95,31 @@ export default function ProfilePage() {
       </section>
 
       <section>
-        <div className="mx-auto max-w-3xl px-6 py-10">
+        <div className="mx-auto max-w-3xl px-6 py-10 space-y-6">
+          {/* ✅ NEW: My Applications panel */}
+          <MyApplicationsPanel />
+
+          {/* Profile card */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <p className="text-xs font-semibold text-gray-500">First name</p>
-                <p className="mt-1 text-sm font-semibold text-gray-900">
-                  {me.firstName || "—"}
-                </p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">{me.firstName || "—"}</p>
               </div>
 
               <div>
                 <p className="text-xs font-semibold text-gray-500">Last name</p>
-                <p className="mt-1 text-sm font-semibold text-gray-900">
-                  {me.lastName || "—"}
-                </p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">{me.lastName || "—"}</p>
               </div>
 
               <div>
                 <p className="text-xs font-semibold text-gray-500">Email</p>
-                <p className="mt-1 text-sm font-semibold text-gray-900">
-                  {me.email || "—"}
-                </p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">{me.email || "—"}</p>
               </div>
 
               <div>
                 <p className="text-xs font-semibold text-gray-500">Phone number</p>
-                <p className="mt-1 text-sm font-semibold text-gray-900">
-                  {me.phoneNumber || "—"}
-                </p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">{me.phoneNumber || "—"}</p>
               </div>
 
               <div>

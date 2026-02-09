@@ -1,6 +1,7 @@
 // frontend/src/app/admin/applications/page.tsx
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type ApplicationRow = {
@@ -14,6 +15,7 @@ type ApplicationRow = {
   courseName?: string | null;
   createdAt?: string | Date | null;
   status?: string | null;
+  attachmentsCount?: number | null;
 };
 
 function cx(...c: Array<string | false | undefined | null>) {
@@ -32,13 +34,25 @@ function formatDate(d: any) {
   });
 }
 
+function humanStatus(s?: string | null) {
+  const v = (s || "SUBMITTED").toUpperCase();
+  if (v === "SUBMITTED") return "Submitted";
+  if (v === "IN_PROGRESS") return "In progress";
+  if (v === "OFFER_MADE") return "Offer made";
+  if (v === "GRANTED") return "Granted";
+  return s || "Submitted";
+}
+
 export default function AdminApplicationsPage() {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<ApplicationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const canSearch = useMemo(() => q.trim().length === 0 || q.trim().length >= 2, [q]);
+  const canSearch = useMemo(
+    () => q.trim().length === 0 || q.trim().length >= 2,
+    [q]
+  );
 
   async function load() {
     if (!canSearch) {
@@ -50,9 +64,10 @@ export default function AdminApplicationsPage() {
     setMsg(null);
 
     try {
-      const res = await fetch(`/api/admin/applications?q=${encodeURIComponent(q.trim())}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/admin/applications?q=${encodeURIComponent(q.trim())}`,
+        { cache: "no-store" }
+      );
 
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || "Failed to load applications.");
@@ -73,7 +88,6 @@ export default function AdminApplicationsPage() {
 
   return (
     <main className="bg-white">
-      {/* Header (no back links here) */}
       <section className="rounded-2xl border border-gray-200 bg-[color:var(--color-brand-soft)] p-6">
         <h1 className="text-2xl font-bold text-gray-900">Applications</h1>
         <p className="mt-1 text-sm text-gray-700">
@@ -92,7 +106,7 @@ export default function AdminApplicationsPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-2">
               <input
-                className="w-[320px] max-w-full rounded-md border border-gray-300 px-4 py-2 text-sm"
+                className="w-[360px] max-w-full rounded-md border border-gray-300 px-4 py-2 text-sm"
                 placeholder="Search by reference, email, name, course…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -125,15 +139,18 @@ export default function AdminApplicationsPage() {
                   <th className="py-3 pr-4">Country</th>
                   <th className="py-3 pr-4">Type</th>
                   <th className="py-3 pr-4">Status</th>
-                  <th className="py-3 pr-0">Submitted</th>
+                  <th className="py-3 pr-4">Attachments</th>
+                  <th className="py-3 pr-4">Submitted</th>
+                  <th className="py-3 pr-0">Action</th>
                 </tr>
               </thead>
 
               <tbody className="divide-y">
                 {items.map((a) => {
                   const name =
-                    `${a.firstName || ""} ${a.lastName || ""}`.trim() ||
-                    "—";
+                    `${a.firstName || ""} ${a.lastName || ""}`.trim() || "—";
+                  const att = Number(a.attachmentsCount || 0);
+
                   return (
                     <tr key={a.id} className="text-gray-800">
                       <td className="py-3 pr-4 font-mono font-semibold text-gray-900">
@@ -144,15 +161,40 @@ export default function AdminApplicationsPage() {
                       <td className="py-3 pr-4">{a.courseName || "—"}</td>
                       <td className="py-3 pr-4">{a.countryOfResidence || "—"}</td>
                       <td className="py-3 pr-4">{a.applicationType || "—"}</td>
-                      <td className="py-3 pr-4">{a.status || "Submitted"}</td>
-                      <td className="py-3 pr-0">{formatDate(a.createdAt)}</td>
+                      <td className="py-3 pr-4">{humanStatus(a.status)}</td>
+                      <td className="py-3 pr-4">
+                        {att > 0 ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-800">
+                              {att}
+                            </span>
+                            <Link
+                              href={`/admin/applications/${a.id}`}
+                              className="text-xs font-semibold text-[color:var(--color-brand)] hover:underline"
+                            >
+                              View files
+                            </Link>
+                          </span>
+                        ) : (
+                          "0"
+                        )}
+                      </td>
+                      <td className="py-3 pr-4">{formatDate(a.createdAt)}</td>
+                      <td className="py-3 pr-0">
+                        <Link
+                          href={`/admin/applications/${a.id}`}
+                          className="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                        >
+                          View →
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}
 
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="py-10 text-center text-gray-500">
+                    <td colSpan={10} className="py-10 text-center text-gray-500">
                       No applications found.
                     </td>
                   </tr>
