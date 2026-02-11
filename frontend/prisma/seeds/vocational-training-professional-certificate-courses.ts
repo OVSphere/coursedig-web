@@ -3,14 +3,14 @@ import type { PrismaClient } from "../../src/generated/prisma/client";
 import { readJsonArray } from "./_helpers";
 
 type CourseRow = {
-  slug?: string; // ✅ NEW: optional (your JSON doesn't include slug)
+  slug?: string; // optional (slug can be generated)
   title: string;
 
   shortDescription?: string;
   overview?: string;
 
-  whoItsFor?: string; // ✅ NEW: your JSON includes this
-  whatYoullLearn?: string; // ✅ NEW: your JSON includes this
+  whoItsFor?: string;
+  whatYoullLearn?: string;
 
   delivery?: string;
   duration?: string;
@@ -23,7 +23,6 @@ type CourseRow = {
 
 export type SeedResult = { read: number; created: number; updated: number };
 
-// ✅ NEW: generate slug from title when slug is missing
 function slugify(input: string) {
   return input
     .toLowerCase()
@@ -31,6 +30,11 @@ function slugify(input: string) {
     .replace(/&/g, "and")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function clean(v: unknown) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s ? s : null;
 }
 
 export default async function seedVocationalTraining(
@@ -48,12 +52,10 @@ export default async function seedVocationalTraining(
   for (let i = 0; i < courses.length; i++) {
     const c = courses[i];
 
-    // ✅ NEW: require title (slug can be generated)
     const title = String(c?.title ?? "").trim();
     if (!title) continue;
 
-    // ✅ NEW: generate slug if missing
-    const slug = String(c.slug ?? slugify(title)).trim();
+    const slug = String(c?.slug ?? slugify(title)).trim();
     if (!slug) continue;
 
     const exists = await prisma.course.findUnique({
@@ -64,20 +66,23 @@ export default async function seedVocationalTraining(
     const data = {
       title,
       category,
-      shortDescription: c.shortDescription ?? "View details and next steps.",
-      overview: c.overview ?? `Full details for ${title} will be published shortly.`,
 
-      // ✅ NEW: persist JSON fields to DB (schema supports them)
-      whoItsFor: c.whoItsFor ?? null,
-      whatYoullLearn: c.whatYoullLearn ?? null,
+      shortDescription:
+        clean(c.shortDescription) ?? "View details and next steps.",
+      overview:
+        clean(c.overview) ?? `Full details for ${title} will be published shortly.`,
 
-      delivery: c.delivery ?? null,
-      duration: c.duration ?? null,
-      entryRequirements: c.entryRequirements ?? null,
-      startDatesNote: c.startDatesNote ?? null,
-      priceNote: c.priceNote ?? null,
-      heroImage: c.heroImage ?? null,
-      imageAlt: c.imageAlt ?? null,
+      whoItsFor: clean(c.whoItsFor),
+      whatYoullLearn: clean(c.whatYoullLearn),
+
+      delivery: clean(c.delivery),
+      duration: clean(c.duration),
+      entryRequirements: clean(c.entryRequirements),
+      startDatesNote: clean(c.startDatesNote),
+      priceNote: clean(c.priceNote),
+
+      heroImage: clean(c.heroImage),
+      imageAlt: clean(c.imageAlt),
 
       published: true,
       sortOrder: i,

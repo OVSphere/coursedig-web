@@ -11,6 +11,34 @@ function formatGBPFromPence(pence: number) {
   }).format(pence / 100);
 }
 
+function getCategoryBackLink(category: string | null | undefined) {
+  const cat = (category || "").trim();
+
+  const MAP: Record<
+    string,
+    { href: string; label: string }
+  > = {
+    "Vocational Training / Professional Certificate Courses": {
+      href: "/courses/vocational-training-professional-certificate-courses",
+      label: "Back to Vocational courses",
+    },
+    "Level 3 – University Entry Courses": {
+      href: "/courses/level-3-university-entry-courses",
+      label: "Back to Level 3 courses",
+    },
+    "Level 4 & 5 – University First and Second Year Courses": {
+      href: "/courses/level-4-and-5-university-first-second-year-courses",
+      label: "Back to Level 4 & 5 courses",
+    },
+    "Level 7 Diploma – Masters / LLM / MBA Advanced Entry": {
+      href: "/courses/level-7-diploma-masters-llm-mba-advanced-entry",
+      label: "Back to Level 7 diplomas",
+    },
+  };
+
+  return MAP[cat] || { href: "/courses", label: "Back to all courses" };
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -47,8 +75,7 @@ export async function generateMetadata({
   return {
     title: `${course.title} | CourseDig`,
     description:
-      course.shortDescription ||
-      `View details and next steps for ${course.title}.`,
+      course.shortDescription || `View details and next steps for ${course.title}.`,
     openGraph: course.heroImage
       ? {
           title: `${course.title} | CourseDig`,
@@ -81,8 +108,7 @@ export default async function CourseDetailsPage({
 
   const category = course.category || "Course";
   const title = course.title || "Course";
-  const shortDescription =
-    course.shortDescription || "View details and next steps.";
+  const shortDescription = course.shortDescription || "View details and next steps.";
 
   const overview =
     course.overview ||
@@ -94,14 +120,19 @@ export default async function CourseDetailsPage({
 
   const entryRequirements = course.entryRequirements || "To be confirmed";
   const duration = course.duration || "To be confirmed";
-  const delivery =
-    course.delivery || "To be confirmed (online and/or in-person)";
+  const delivery = course.delivery || "To be confirmed (online and/or in-person)";
 
   const fee = course.fee && course.fee.isActive ? course.fee : null;
-  const priceNote = course.priceNote || "Pricing available on request.";
+
+  // ✅ Show priceNote even when fee exists (as you requested)
+  const priceNote =
+    (course.priceNote && String(course.priceNote).trim()) ||
+    "Pricing details are available on request.";
 
   const heroImage = course.heroImage || "";
   const imageAlt = course.imageAlt || title;
+
+  const back = getCategoryBackLink(course.category);
 
   return (
     <main className="bg-white">
@@ -133,11 +164,12 @@ export default async function CourseDetailsPage({
                   Ask a question
                 </Link>
 
+                {/* ✅ Back link now goes to correct category page */}
                 <Link
-                  href="/courses"
+                  href={back.href}
                   className="inline-flex items-center justify-center rounded-md px-6 py-3 text-sm font-semibold text-[color:var(--color-brand)] hover:underline"
                 >
-                  Back to courses
+                  {back.label}
                 </Link>
               </div>
             </div>
@@ -162,62 +194,44 @@ export default async function CourseDetailsPage({
       <section>
         <div className="mx-auto max-w-7xl px-6 py-10">
           <div className="grid gap-6 lg:grid-cols-12 lg:items-stretch">
-            {/* LEFT: Overview (slightly reduced) */}
+            {/* LEFT */}
             <div className="lg:col-span-6 flex">
               <div className="w-full rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                 <p className="text-sm font-semibold text-gray-900">Overview</p>
-                <p className="mt-2 text-sm leading-6 text-gray-700">
-                  {overview}
-                </p>
+                <p className="mt-2 text-sm leading-6 text-gray-700">{overview}</p>
 
-                {whoItsFor && (
+                {whoItsFor ? (
                   <div className="mt-6">
-                    <p className="text-sm font-semibold text-gray-900">
-                      Who it’s for
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-gray-700">
-                      {whoItsFor}
-                    </p>
+                    <p className="text-sm font-semibold text-gray-900">Who it’s for</p>
+                    <p className="mt-2 text-sm leading-6 text-gray-700">{whoItsFor}</p>
                   </div>
-                )}
+                ) : null}
 
-                {whatYoullLearn && (
+                {whatYoullLearn ? (
                   <div className="mt-6">
-                    <p className="text-sm font-semibold text-gray-900">
-                      What you’ll learn
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-gray-700">
-                      {whatYoullLearn}
-                    </p>
+                    <p className="text-sm font-semibold text-gray-900">What you’ll learn</p>
+                    <p className="mt-2 text-sm leading-6 text-gray-700">{whatYoullLearn}</p>
                   </div>
-                )}
+                ) : null}
 
-                {startDatesNote && (
+                {startDatesNote ? (
                   <div className="mt-6">
-                    <p className="text-sm font-semibold text-gray-900">
-                      Start dates
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-gray-700">
-                      {startDatesNote}
-                    </p>
+                    <p className="text-sm font-semibold text-gray-900">Start dates</p>
+                    <p className="mt-2 text-sm leading-6 text-gray-700">{startDatesNote}</p>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
 
-            {/* MIDDLE: Entry requirements (wider) */}
+            {/* MIDDLE */}
             <div className="lg:col-span-3 flex">
               <div className="w-full rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-                <p className="text-sm font-semibold text-gray-900">
-                  Entry requirements
-                </p>
-                <p className="mt-2 text-sm leading-6 text-gray-700">
-                  {entryRequirements}
-                </p>
+                <p className="text-sm font-semibold text-gray-900">Entry requirements</p>
+                <p className="mt-2 text-sm leading-6 text-gray-700">{entryRequirements}</p>
               </div>
             </div>
 
-            {/* RIGHT: stacked, same width */}
+            {/* RIGHT */}
             <div className="lg:col-span-3 grid gap-6">
               <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                 <p className="text-sm font-semibold text-gray-900">Duration</p>
@@ -234,21 +248,20 @@ export default async function CourseDetailsPage({
 
                 {fee ? (
                   <>
+                    {/* ✅ removed (LEVEL7) / category label beside fee */}
                     <p className="mt-2 text-sm text-gray-700">
                       <span className="font-semibold">
                         {formatGBPFromPence(fee.amountPence)}
-                      </span>{" "}
-                      <span className="text-gray-600">({fee.level})</span>
+                      </span>
                     </p>
 
-                    {fee.note && (
-                      <p className="mt-3 text-sm leading-6 text-gray-700">
-                        {fee.note}
-                      </p>
-                    )}
+                    {/* ✅ show priceNote below fee (as requested) */}
+                    {priceNote ? (
+                      <p className="mt-3 text-sm leading-6 text-gray-700">{priceNote}</p>
+                    ) : null}
                   </>
                 ) : (
-                  <p className="mt-2 text-sm text-gray-700">{priceNote}</p>
+                  <p className="mt-2 text-sm leading-6 text-gray-700">{priceNote}</p>
                 )}
 
                 <p className="mt-3 text-xs text-gray-500">

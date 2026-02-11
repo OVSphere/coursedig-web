@@ -7,6 +7,10 @@ type CourseJson = {
   title: string;
   shortDescription?: string;
   overview?: string;
+
+  whoItsFor?: string;
+  whatYoullLearn?: string;
+
   delivery?: string;
   duration?: string;
   entryRequirements?: string;
@@ -40,6 +44,10 @@ export default async function seedLevel7(prisma: PrismaClient) {
       category: CATEGORY,
       shortDescription: c.shortDescription || "View details and next steps.",
       overview: c.overview || `Full details for ${c.title} will be published shortly.`,
+
+      whoItsFor: c.whoItsFor ?? null,
+      whatYoullLearn: c.whatYoullLearn ?? null,
+
       delivery: c.delivery || null,
       duration: c.duration || null,
       entryRequirements: c.entryRequirements || null,
@@ -47,6 +55,7 @@ export default async function seedLevel7(prisma: PrismaClient) {
       priceNote: c.priceNote || null,
       heroImage: c.heroImage ?? null,
       imageAlt: c.imageAlt ?? null,
+
       published: true,
       sortOrder: i,
     };

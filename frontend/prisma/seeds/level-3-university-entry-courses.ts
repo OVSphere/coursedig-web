@@ -7,6 +7,10 @@ type CourseRow = {
   title: string;
   shortDescription?: string;
   overview?: string;
+
+  whoItsFor?: string;
+  whatYoullLearn?: string;
+
   delivery?: string;
   duration?: string;
   entryRequirements?: string;
@@ -18,15 +22,10 @@ type CourseRow = {
 
 export type SeedResult = { read: number; created: number; updated: number };
 
-export default async function seedLevel3(
-  prisma: PrismaClient
-): Promise<SeedResult> {
+export default async function seedLevel3(prisma: PrismaClient): Promise<SeedResult> {
   const category = "Level 3 – University Entry Courses";
-  // const tag = "level-3";
 
-  const courses = readJsonArray<CourseRow>(
-    "data/level-3-university-entry-courses.json"
-  );
+  const courses = readJsonArray<CourseRow>("data/level-3-university-entry-courses.json");
 
   let created = 0;
   let updated = 0;
@@ -45,6 +44,10 @@ export default async function seedLevel3(
       category,
       shortDescription: c.shortDescription ?? "View details and next steps.",
       overview: c.overview ?? `Full details for ${c.title} will be published shortly.`,
+
+      whoItsFor: c.whoItsFor ?? null,
+      whatYoullLearn: c.whatYoullLearn ?? null,
+
       delivery: c.delivery ?? null,
       duration: c.duration ?? null,
       entryRequirements: c.entryRequirements ?? null,
@@ -52,6 +55,7 @@ export default async function seedLevel3(
       priceNote: c.priceNote ?? null,
       heroImage: c.heroImage ?? null,
       imageAlt: c.imageAlt ?? null,
+
       published: true,
       sortOrder: i,
     };
