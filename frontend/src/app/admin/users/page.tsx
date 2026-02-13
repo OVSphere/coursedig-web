@@ -1,4 +1,4 @@
-//src/app/admin/users/page.tsx
+// src/app/admin/users/page.tsx
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
@@ -14,7 +14,7 @@ export default async function AdminUsersPage() {
     redirect("/login");
   }
 
-  const users = await prisma.user.findMany({
+  const usersRaw = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -26,6 +26,15 @@ export default async function AdminUsersPage() {
       createdAt: true,
     },
   });
+
+  // ✅ Convert Date fields to serialisable strings for client component
+  const users = usersRaw.map((u) => ({
+    ...u,
+    emailVerifiedAt: u.emailVerifiedAt
+      ? u.emailVerifiedAt.toISOString()
+      : null,
+    createdAt: u.createdAt.toISOString(),
+  }));
 
   return <AdminUsersClient users={users} />;
 }
