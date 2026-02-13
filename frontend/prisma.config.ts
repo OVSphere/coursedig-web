@@ -1,14 +1,11 @@
-// prisma.config.ts
-import "dotenv/config";
-import { defineConfig, env } from "prisma/config";
+// frontend/prisma.config.ts
+import { defineConfig } from "prisma/config";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
-  migrations: {
-    path: "prisma/migrations",
-    seed: "tsx prisma/seed.ts",
-  },
+  // Prisma 7: datasource URLs must live here (NOT in schema.prisma)
   datasource: {
-    url: env("DATABASE_URL"),
+    url: process.env.DATABASE_URL,
+    directUrl: process.env.DATABASE_DIRECT_URL,
   },
 });
