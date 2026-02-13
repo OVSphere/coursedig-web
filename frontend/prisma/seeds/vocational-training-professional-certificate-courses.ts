@@ -1,5 +1,5 @@
 // prisma/seeds/vocational-training-professional-certificate-courses.ts
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { readJsonArray } from "./_helpers";
 
 type CourseRow = {

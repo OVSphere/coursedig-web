@@ -1,7 +1,7 @@
 // prisma/seeds/level-4-and-5-university-first-second-year-courses.ts
 import path from "path";
 import fs from "fs/promises";
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { PrismaClient } from "@prisma/client";
 
 type SeedStats = { read: number; created: number; updated: number; skipped?: number };
 

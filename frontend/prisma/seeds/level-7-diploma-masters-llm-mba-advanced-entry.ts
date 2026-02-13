@@ -1,5 +1,5 @@
 // prisma/seeds/level-7-diploma-masters-llm-mba-advanced-entry.ts
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { readJsonArray } from "./_helpers";
 
 type CourseJson = {

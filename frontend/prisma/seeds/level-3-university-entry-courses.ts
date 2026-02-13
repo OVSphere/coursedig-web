@@ -1,5 +1,5 @@
 // prisma/seeds/level-3-university-entry-courses.ts
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { readJsonArray } from "./_helpers";
 
 type CourseRow = {
