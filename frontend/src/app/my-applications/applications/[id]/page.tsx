@@ -72,7 +72,6 @@ export default function MyApplicationDetailPage() {
   async function load() {
     if (!id) {
       setMsg("Missing application id.");
-      setApp(null);
       setLoading(false);
       return;
     }
@@ -81,7 +80,9 @@ export default function MyApplicationDetailPage() {
     setMsg(null);
 
     try {
-      const res = await fetch(`/api/applications/my/${encodeURIComponent(id)}`, { cache: "no-store" });
+      const res = await fetch(`/api/applications/my/${encodeURIComponent(id)}`, {
+        cache: "no-store",
+      });
       const json = await res.json().catch(() => ({}));
 
       if (res.status === 401) {
