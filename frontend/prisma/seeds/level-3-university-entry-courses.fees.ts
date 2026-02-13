@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { PrismaClient } from "../../src/generated/prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { upsertFees } from "./fee-helpers";
 
 export async function seedLevel3Fees(prisma: PrismaClient) {
