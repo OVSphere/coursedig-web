@@ -31,11 +31,12 @@ function humanType(t: string) {
   return "Other";
 }
 
-export default async function AdminEnquiriesPage({
-  searchParams,
-}: {
-  searchParams?: { q?: string };
-}) {
+type PageProps = {
+  // Next 16 expects searchParams to be Promise-like in PageProps typing
+  searchParams?: Promise<{ q?: string }>;
+};
+
+export default async function AdminEnquiriesPage({ searchParams }: PageProps) {
   const gate = await requireAdmin();
 
   if (!gate.ok && gate.reason === "UNAUTHENTICATED") {
@@ -45,7 +46,8 @@ export default async function AdminEnquiriesPage({
     redirect("/forbidden");
   }
 
-  const q = (searchParams?.q || "").trim();
+  const sp = (await searchParams) || {};
+  const q = (sp.q || "").trim();
 
   const enquiries = await prisma.enquiry.findMany({
     where: q
@@ -88,10 +90,7 @@ export default async function AdminEnquiriesPage({
           </div>
 
           <div className="mt-4">
-            <Link
-              href="/"
-              className="text-sm font-semibold text-[color:var(--color-brand)] hover:underline"
-            >
+            <Link href="/" className="text-sm font-semibold text-[color:var(--color-brand)] hover:underline">
               ← Back to site
             </Link>
           </div>
@@ -118,14 +117,10 @@ export default async function AdminEnquiriesPage({
                   <details key={e.id} className="border-t border-gray-200 px-4 py-3">
                     <summary className="grid cursor-pointer grid-cols-12 gap-2">
                       <div className="col-span-2 font-mono text-sm text-gray-900">{e.enquiryRef}</div>
-                      <div className="col-span-2 text-sm font-semibold text-gray-800">
-                        {humanType(t)}
-                      </div>
+                      <div className="col-span-2 text-sm font-semibold text-gray-800">{humanType(t)}</div>
                       <div className="col-span-3 text-gray-900">{e.fullName}</div>
                       <div className="col-span-3 text-gray-700">{maskEmail(e.email)}</div>
-                      <div className="col-span-2 text-sm text-gray-600">
-                        {new Date(e.createdAt).toLocaleString()}
-                      </div>
+                      <div className="col-span-2 text-sm text-gray-600">{new Date(e.createdAt).toLocaleString()}</div>
                     </summary>
 
                     <div className="mt-3 rounded-xl bg-gray-50 p-4">
@@ -139,12 +134,8 @@ export default async function AdminEnquiriesPage({
                       </div>
 
                       <div className="mt-4">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-                          Message
-                        </div>
-                        <pre className="mt-2 whitespace-pre-wrap text-sm text-gray-800">
-                          {e.message}
-                        </pre>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">Message</div>
+                        <pre className="mt-2 whitespace-pre-wrap text-sm text-gray-800">{e.message}</pre>
                       </div>
                     </div>
                   </details>
