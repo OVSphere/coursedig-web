@@ -1,5 +1,5 @@
 // frontend/src/app/api/admin/attachments/[attachmentId]/download/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { s3 } from "@/lib/s3";
@@ -12,15 +12,19 @@ function jsonErr(message: string, status = 400) {
   return NextResponse.json({ message }, { status });
 }
 
-export async function GET(_req: Request, ctx: { params: { attachmentId: string } }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ attachmentId: string }> }
+) {
   const gate = await requireAdminApi();
   if (!gate.ok) return jsonErr("Not authorised.", gate.status);
 
-  const attachmentId = String(ctx?.params?.attachmentId || "").trim();
-  if (!attachmentId) return jsonErr("Missing attachment id.", 400);
+  const { attachmentId } = await params;
+  const id = String(attachmentId || "").trim();
+  if (!id) return jsonErr("Missing attachment id.", 400);
 
   const row = await prisma.applicationAttachment.findUnique({
-    where: { id: attachmentId },
+    where: { id },
     select: {
       id: true,
       fileName: true,
