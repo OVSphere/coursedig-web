@@ -1,5 +1,5 @@
 // frontend/src/app/api/applications/my/[id]/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -9,16 +9,20 @@ function jsonErr(message: string, status = 400) {
   return NextResponse.json({ message }, { status });
 }
 
-export async function GET(_req: Request, ctx: { params: { id: string } }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const user = await getCurrentUser();
     if (!user) return jsonErr("Not authenticated.", 401);
 
-    const id = String(ctx?.params?.id || "").trim();
-    if (!id) return jsonErr("Missing application id.", 400);
+    const { id } = await params;
+    const appId = String(id || "").trim();
+    if (!appId) return jsonErr("Missing application id.", 400);
 
     const app = await prisma.application.findFirst({
-      where: { id, userId: user.id },
+      where: { id: appId, userId: user.id },
       select: {
         id: true,
         appRef: true,
@@ -51,6 +55,9 @@ export async function GET(_req: Request, ctx: { params: { id: string } }) {
     return NextResponse.json({ application: app }, { status: 200 });
   } catch (e) {
     console.error("MY_APPLICATION_DETAIL_ERROR:", e);
-    return NextResponse.json({ message: "Failed to load application." }, { status: 500 });
+    return NextResponse.json(
+      { message: "Failed to load application." },
+      { status: 500 }
+    );
   }
 }
