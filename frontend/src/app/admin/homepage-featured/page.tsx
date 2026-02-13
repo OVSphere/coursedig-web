@@ -29,9 +29,10 @@ export default function AdminHomepageFeaturedPage() {
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch(`/api/admin/homepage-featured?q=${encodeURIComponent(q)}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/admin/homepage-featured?q=${encodeURIComponent(q)}`,
+        { cache: "no-store" }
+      );
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.message || "Failed to load courses.");
       setItems(json.items ?? []);
@@ -50,34 +51,64 @@ export default function AdminHomepageFeaturedPage() {
   async function setRank(
     id: string,
     section: "POPULAR" | "LEVEL45" | "LEVEL7",
-    rank: number | null
+    rank: number | null,
+    opts?: { silent?: boolean } // ✅ small safety: avoid double “Updated.” when clearing all
   ) {
-    setMsg(null);
+    if (!opts?.silent) setMsg(null);
+
     try {
       const res = await fetch("/api/admin/homepage-featured", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id, section, rank }),
       });
+
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.message || "Update failed.");
+
+      // ✅ keep behaviour the same (reload after each update)
       await load();
-      setMsg("Updated.");
+
+      if (!opts?.silent) setMsg("Updated.");
     } catch (e: any) {
-      setMsg(e?.message || "Update failed.");
+      if (!opts?.silent) setMsg(e?.message || "Update failed.");
+    }
+  }
+
+  async function clearAllRanks(id: string) {
+    setMsg(null);
+    try {
+      // ✅ sequential so you don’t get racing reloads/errors
+      await setRank(id, "POPULAR", null, { silent: true });
+      await setRank(id, "LEVEL45", null, { silent: true });
+      await setRank(id, "LEVEL7", null, { silent: true });
+      setMsg("Cleared.");
+    } catch (e: any) {
+      setMsg(e?.message || "Clear failed.");
     }
   }
 
   const featuredPopular = useMemo(
-    () => items.filter((x) => x.homePopularRank != null).sort((a, b) => (a.homePopularRank! - b.homePopularRank!)),
+    () =>
+      items
+        .filter((x) => x.homePopularRank != null)
+        .sort((a, b) => a.homePopularRank! - b.homePopularRank!),
     [items]
   );
+
   const featured45 = useMemo(
-    () => items.filter((x) => x.homeLevel45Rank != null).sort((a, b) => (a.homeLevel45Rank! - b.homeLevel45Rank!)),
+    () =>
+      items
+        .filter((x) => x.homeLevel45Rank != null)
+        .sort((a, b) => a.homeLevel45Rank! - b.homeLevel45Rank!),
     [items]
   );
+
   const featured7 = useMemo(
-    () => items.filter((x) => x.homeLevel7Rank != null).sort((a, b) => (a.homeLevel7Rank! - b.homeLevel7Rank!)),
+    () =>
+      items
+        .filter((x) => x.homeLevel7Rank != null)
+        .sort((a, b) => a.homeLevel7Rank! - b.homeLevel7Rank!),
     [items]
   );
 
@@ -86,9 +117,12 @@ export default function AdminHomepageFeaturedPage() {
       {/* ✅ Header (like your attached style) */}
       <section className="border-b bg-[color:var(--color-brand-soft)]">
         <div className="mx-auto max-w-6xl px-6 py-10">
-          <h1 className="text-3xl font-bold text-gray-900">Homepage featured courses</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Homepage featured courses
+          </h1>
           <p className="mt-2 text-sm text-gray-700">
-            Choose which courses appear on the homepage and set their order (rank 1 = first).
+            Choose which courses appear on the homepage and set their order (rank
+            1 = first).
           </p>
 
           {msg && (
@@ -100,7 +134,7 @@ export default function AdminHomepageFeaturedPage() {
       </section>
 
       <section>
-        <div className="mx-auto max-w-6xl px-6 py-10 space-y-8">
+        <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
           {/* Quick view of what’s currently featured */}
           <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -110,7 +144,9 @@ export default function AdminHomepageFeaturedPage() {
                 {featuredPopular.length ? (
                   featuredPopular.map((x) => (
                     <li key={x.id} className="flex justify-between gap-2">
-                      <span className="font-semibold text-gray-900">{x.title}</span>
+                      <span className="font-semibold text-gray-900">
+                        {x.title}
+                      </span>
                       <span className="text-gray-600">#{x.homePopularRank}</span>
                     </li>
                   ))
@@ -127,7 +163,9 @@ export default function AdminHomepageFeaturedPage() {
                 {featured45.length ? (
                   featured45.map((x) => (
                     <li key={x.id} className="flex justify-between gap-2">
-                      <span className="font-semibold text-gray-900">{x.title}</span>
+                      <span className="font-semibold text-gray-900">
+                        {x.title}
+                      </span>
                       <span className="text-gray-600">#{x.homeLevel45Rank}</span>
                     </li>
                   ))
@@ -144,7 +182,9 @@ export default function AdminHomepageFeaturedPage() {
                 {featured7.length ? (
                   featured7.map((x) => (
                     <li key={x.id} className="flex justify-between gap-2">
-                      <span className="font-semibold text-gray-900">{x.title}</span>
+                      <span className="font-semibold text-gray-900">
+                        {x.title}
+                      </span>
                       <span className="text-gray-600">#{x.homeLevel7Rank}</span>
                     </li>
                   ))
@@ -185,7 +225,7 @@ export default function AdminHomepageFeaturedPage() {
                     <th className="px-3 py-2">Slug</th>
                     <th className="px-3 py-2">Published</th>
                     <th className="px-3 py-2">Popular rank</th>
-                    <th className="px-3 py-2">Level 4&5 rank</th>
+                    <th className="px-3 py-2">Level 4&amp;5 rank</th>
                     <th className="px-3 py-2">Level 7 rank</th>
                     <th className="px-3 py-2">Actions</th>
                   </tr>
@@ -194,13 +234,18 @@ export default function AdminHomepageFeaturedPage() {
                 <tbody className="divide-y divide-gray-200">
                   {items.map((x) => (
                     <tr key={x.id} className="align-top">
-                      <td className="px-3 py-3 font-semibold text-gray-900">{x.title}</td>
+                      <td className="px-3 py-3 font-semibold text-gray-900">
+                        {x.title}
+                      </td>
                       <td className="px-3 py-3 text-gray-600">{x.slug}</td>
+
                       <td className="px-3 py-3">
                         <span
                           className={cx(
                             "inline-flex rounded-full px-2 py-1 text-xs font-semibold",
-                            x.published ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-700"
+                            x.published
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-700"
                           )}
                         >
                           {x.published ? "Published" : "Draft"}
@@ -214,7 +259,11 @@ export default function AdminHomepageFeaturedPage() {
                           className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
                           value={x.homePopularRank ?? ""}
                           onChange={(e) =>
-                            setRank(x.id, "POPULAR", e.target.value ? Number(e.target.value) : null)
+                            setRank(
+                              x.id,
+                              "POPULAR",
+                              e.target.value ? Number(e.target.value) : null
+                            )
                           }
                         />
                       </td>
@@ -226,7 +275,11 @@ export default function AdminHomepageFeaturedPage() {
                           className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
                           value={x.homeLevel45Rank ?? ""}
                           onChange={(e) =>
-                            setRank(x.id, "LEVEL45", e.target.value ? Number(e.target.value) : null)
+                            setRank(
+                              x.id,
+                              "LEVEL45",
+                              e.target.value ? Number(e.target.value) : null
+                            )
                           }
                         />
                       </td>
@@ -238,7 +291,11 @@ export default function AdminHomepageFeaturedPage() {
                           className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
                           value={x.homeLevel7Rank ?? ""}
                           onChange={(e) =>
-                            setRank(x.id, "LEVEL7", e.target.value ? Number(e.target.value) : null)
+                            setRank(
+                              x.id,
+                              "LEVEL7",
+                              e.target.value ? Number(e.target.value) : null
+                            )
                           }
                         />
                       </td>
@@ -246,12 +303,7 @@ export default function AdminHomepageFeaturedPage() {
                       <td className="px-3 py-3">
                         <button
                           type="button"
-                          onClick={() => {
-                            // quick clear all ranks
-                            setRank(x.id, "POPULAR", null);
-                            setRank(x.id, "LEVEL45", null);
-                            setRank(x.id, "LEVEL7", null);
-                          }}
+                          onClick={() => clearAllRanks(x.id)}
                           className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-gray-50"
                         >
                           Clear
@@ -262,7 +314,10 @@ export default function AdminHomepageFeaturedPage() {
 
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
+                      <td
+                        colSpan={7}
+                        className="px-3 py-8 text-center text-gray-500"
+                      >
                         No courses found.
                       </td>
                     </tr>
@@ -272,7 +327,8 @@ export default function AdminHomepageFeaturedPage() {
             </div>
 
             <p className="mt-4 text-xs text-gray-500">
-              Tip: Set rank to 1,2,3 to control order. Leave blank to remove from homepage section.
+              Tip: Set rank to 1,2,3 to control order. Leave blank to remove from
+              homepage section.
             </p>
           </div>
         </div>

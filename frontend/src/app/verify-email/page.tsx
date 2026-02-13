@@ -2,27 +2,81 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 type Status = "loading" | "ok" | "error";
 
+function safeGetSession(key: string) {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetSession(key: string, value: string) {
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}
+
+function safeRemoveSession(key: string) {
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
 export default function VerifyEmailPage() {
   const sp = useSearchParams();
+  const router = useRouter();
 
   const token = useMemo(() => sp.get("token") || "", [sp]);
   const next = useMemo(() => sp.get("next") || "/apply", [sp]);
 
+  // Marks a "recent verification succeeded" state (so a refresh without token stays friendly)
+  const LAST_OK_KEY = "cd:verify-email:lastOk";
+
+  // Token-specific (optional)
+  const tokenDoneKey = useMemo(
+    () => (token ? `cd:verify-email:done:${token}` : ""),
+    [token]
+  );
+
   const [status, setStatus] = useState<Status>("loading");
   const [message, setMessage] = useState("Verifying your email…");
+  const [alreadyVerified, setAlreadyVerified] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function run() {
+      // ✅ If token missing but we *recently verified*, show success + login
       if (!token) {
+        const recentOk = safeGetSession(LAST_OK_KEY) === "1";
+        if (recentOk) {
+          setStatus("ok");
+          setAlreadyVerified(false);
+          setMessage("Email verified successfully. You can continue to login.");
+          return;
+        }
+
         setStatus("error");
-        setMessage("Missing verification token.");
+        setMessage("Missing verification token. Please open the link from your email again.");
+        return;
+      }
+
+      // ✅ If we already handled this token in this session, don't call API again
+      if (tokenDoneKey && safeGetSession(tokenDoneKey) === "ok") {
+        setStatus("ok");
+        setAlreadyVerified(false);
+        setMessage("Email verified successfully. You can continue to login.");
+        // keep URL clean (no token), but do it once
+        router.replace(`/verify-email?next=${encodeURIComponent(next)}`);
         return;
       }
 
@@ -34,25 +88,49 @@ export default function VerifyEmailPage() {
         });
 
         const json = await res.json().catch(() => ({}));
-
         if (cancelled) return;
 
         if (!res.ok) {
-          // Invalid/expired stays error (no redirect)
+          const code = String(json?.code || "");
+          const looksLikeAlreadyUsed = code === "TOKEN_INVALID" || code === "TOKEN_EXPIRED";
+
+          // If token is already used/expired, user might have verified already.
+          // Show a friendly "continue" state + login button.
+          if (looksLikeAlreadyUsed) {
+            setStatus("ok");
+            setAlreadyVerified(true);
+            setMessage(
+              "This link has already been used. If you’ve verified your email, you can continue to login."
+            );
+
+            // keep URL clean and avoid repeated calls on refresh
+            safeSetSession(LAST_OK_KEY, "1");
+            router.replace(`/verify-email?next=${encodeURIComponent(next)}`);
+            return;
+          }
+
           setStatus("error");
-          setMessage(
-            json?.message || "This verification link is invalid or has expired."
-          );
+          setMessage(json?.message || "This verification link is invalid or has expired.");
+          // keep token in URL for real error (so user can copy/send it), do NOT replace
           return;
         }
 
-        // ✅ Success: includes "already verified" OR verified now
+        // ✅ Success (includes alreadyVerified)
+        const isAlready = Boolean(json?.alreadyVerified);
         setStatus("ok");
+        setAlreadyVerified(isAlready);
         setMessage(
-          json?.alreadyVerified
+          isAlready
             ? "Your email is already verified. You can continue to login."
             : "Email verified successfully. You can continue to login."
         );
+
+        // Mark success so refreshes without token remain friendly
+        safeSetSession(LAST_OK_KEY, "1");
+        if (tokenDoneKey) safeSetSession(tokenDoneKey, "ok");
+
+        // ✅ Clean the URL once (removes token so refresh won’t re-verify)
+        router.replace(`/verify-email?next=${encodeURIComponent(next)}`);
       } catch {
         if (!cancelled) {
           setStatus("error");
@@ -65,7 +143,7 @@ export default function VerifyEmailPage() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, next, router, tokenDoneKey]);
 
   const boxClass =
     status === "ok"
@@ -85,19 +163,32 @@ export default function VerifyEmailPage() {
               {status === "loading"
                 ? "Please wait…"
                 : status === "ok"
-                ? "Verified"
+                ? alreadyVerified
+                  ? "You can continue"
+                  : "Verified"
                 : "Unable to verify"}
             </p>
             <p className="mt-1">{message}</p>
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href={`/login?verified=1&next=${encodeURIComponent(next)}`}
-              className="inline-flex items-center justify-center rounded-md bg-[color:var(--color-brand)] px-5 py-3 text-sm font-semibold text-white hover:bg-[color:var(--color-brand-dark)]"
-            >
-              Continue to login
-            </Link>
+            {status === "ok" ? (
+              <Link
+                href={`/login?verified=1&next=${encodeURIComponent(next)}`}
+                className="inline-flex items-center justify-center rounded-md bg-[color:var(--color-brand)] px-5 py-3 text-sm font-semibold text-white hover:bg-[color:var(--color-brand-dark)]"
+              >
+                Login
+              </Link>
+            ) : null}
+
+            {status === "error" ? (
+              <Link
+                href={`/verify-email-gate?next=${encodeURIComponent(next)}`}
+                className="inline-flex items-center justify-center rounded-md bg-[color:var(--color-brand)] px-5 py-3 text-sm font-semibold text-white hover:bg-[color:var(--color-brand-dark)]"
+              >
+                Resend verification email
+              </Link>
+            ) : null}
 
             <Link
               href="/"
@@ -107,11 +198,22 @@ export default function VerifyEmailPage() {
             </Link>
           </div>
 
-          {status === "error" && (
+          {status === "error" ? (
             <p className="mt-5 text-xs text-gray-500">
-              If your link has expired, please log in and use “Resend verification email”.
+              If your link has expired, you can request a new one above.
             </p>
-          )}
+          ) : null}
+
+          {/* Optional: allow clearing the "recent ok" state */}
+          {status === "ok" ? (
+            <button
+              type="button"
+              onClick={() => safeRemoveSession(LAST_OK_KEY)}
+              className="mt-6 text-xs text-gray-500 hover:underline"
+            >
+              Not you? Clear this device state
+            </button>
+          ) : null}
         </div>
       </div>
     </main>

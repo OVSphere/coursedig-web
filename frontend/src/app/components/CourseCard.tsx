@@ -9,7 +9,7 @@ type Props = {
   category?: string | null;
   priceLabel?: string | null;
 
-  // ✅ NEW
+  // ✅ image should come from the same DB field used on course detail (heroImage)
   imageSrc?: string | null;
   imageAlt?: string | null;
 };
@@ -23,8 +23,8 @@ export default function CourseCard({
   imageSrc,
   imageAlt,
 }: Props) {
-  const src = imageSrc?.trim() || "";
-  const alt = (imageAlt?.trim() || title).trim();
+  const src = (imageSrc ?? "").trim();
+  const alt = (imageAlt ?? title).trim();
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">

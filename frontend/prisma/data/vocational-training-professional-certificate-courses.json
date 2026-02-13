@@ -12,7 +12,7 @@
       "delivery": "Online (live sessions) or blended (online + optional in-person support).",
       "startDatesNote": "Monthly intakes (or on-demand for groups).",
       "priceNote": "Pricing details are available on our tuition fees page. We offer flexible payment options to help spread the cost, and a free laptop is available for learners who pay the full course fee upfront (terms and conditions apply).",
-      "heroImage": "/course-images/vocational/artificial-intelligence-fundamentals.jpg",
+      "heroImage": "/images/courses/vocational/artificial-intelligence-fundamentals.jpg",
       "imageAlt": "Artificial Intelligence Fundamentals course"
     },
     {
@@ -27,7 +27,7 @@
       "delivery": "Online (live) with guided labs.",
       "startDatesNote": "Rolling enrolment.",
       "priceNote": "Pricing details are available on our tuition fees page. We offer flexible payment options to help spread the cost, and a free laptop is available for learners who pay the full course fee upfront (terms and conditions apply).",
-      "heroImage": "/course-images/vocational/aws-cloud-fundamentals.jpg",
+      "heroImage": "/images/courses/vocational/aws-cloud-fundamentals.jpg",
       "imageAlt": "AWS Cloud Fundamentals course"
     },
     {
@@ -42,7 +42,7 @@
       "delivery": "Online (live) with workshops and assignments.",
       "startDatesNote": "Monthly intakes.",
       "priceNote": "Pricing details are available on our tuition fees page. We offer flexible payment options to help spread the cost, and a free laptop is available for learners who pay the full course fee upfront (terms and conditions apply).",
-      "heroImage": "/course-images/vocational/business-analyst.jpg",
+      "heroImage": "/images/courses/vocational/business-analyst.jpg",
       "imageAlt": "Business Analyst course"
     },
     {
@@ -57,7 +57,7 @@
       "delivery": "Online (live) or blended.",
       "startDatesNote": "Rolling enrolment.",
       "priceNote": "Pricing details are available on our tuition fees page. We offer flexible payment options to help spread the cost, and a free laptop is available for learners who pay the full course fee upfront (terms and conditions apply).",
-      "heroImage": "/course-images/vocational/cybersecurity-fundamentals.jpg",
+      "heroImage": "/images/courses/vocational/cybersecurity-fundamentals.jpg",
       "imageAlt": "Cybersecurity Fundamentals course"
     },
     {
@@ -72,7 +72,7 @@
       "delivery": "Online (live) with guided practice.",
       "startDatesNote": "Monthly intakes.",
       "priceNote": "Pricing details are available on our tuition fees page. We offer flexible payment options to help spread the cost, and a free laptop is available for learners who pay the full course fee upfront (terms and conditions apply).",
-      "heroImage": "/course-images/vocational/data-analytics.jpg",
+      "heroImage": "/images/courses/vocational/data-analytics.jpg",
       "imageAlt": "Data Analytics course"
     },
     {
@@ -87,7 +87,7 @@
       "delivery": "Online with practical guidance; optional in-person support sessions if available.",
       "startDatesNote": "Rolling enrolment.",
       "priceNote": "Pricing details are available on our tuition fees page. We offer flexible payment options to help spread the cost, and a free laptop is available for learners who pay the full course fee upfront (terms and conditions apply).",
-      "heroImage": "/course-images/vocational/healthcare-support-worker.jpg",
+      "heroImage": "/images/courses/vocational/healthcare-support-worker.jpg",
       "imageAlt": "Healthcare Support Worker course"
     },
     {
@@ -102,7 +102,7 @@
       "delivery": "Online (live) or blended.",
       "startDatesNote": "Monthly intakes.",
       "priceNote": "Pricing details are available on our tuition fees page. We offer flexible payment options to help spread the cost, and a free laptop is available for learners who pay the full course fee upfront (terms and conditions apply).",
-      "heroImage": "/course-images/vocational/health-and-social-care.jpg",
+      "heroImage": "/images/courses/vocational/health-and-social-care.jpg",
       "imageAlt": "Health and Social Care course"
     },
     {
@@ -117,7 +117,7 @@
       "delivery": "Online (live) with practice and feedback.",
       "startDatesNote": "Weekly starts or monthly cohorts.",
       "priceNote": "Pricing details are available on our tuition fees page. We offer flexible payment options to help spread the cost, and a free laptop is available for learners who pay the full course fee upfront (terms and conditions apply).",
-      "heroImage": "/course-images/vocational/ielts-preparation.jpg",
+      "heroImage": "/images/courses/vocational/ielts-preparation.jpg",
       "imageAlt": "IELTS Preparation course"
     },
     {
@@ -132,7 +132,7 @@
       "delivery": "Online (live) with guided exercises.",
       "startDatesNote": "Monthly intakes.",
       "priceNote": "Pricing details are available on our tuition fees page. We offer flexible payment options to help spread the cost, and a free laptop is available for learners who pay the full course fee upfront (terms and conditions apply).",
-      "heroImage": "/course-images/vocational/software-testing-automation.jpg",
+      "heroImage": "/images/courses/vocational/software-testing-automation.jpg",
       "imageAlt": "Software Testing Automation course"
     },
     {
@@ -147,7 +147,7 @@
       "delivery": "Online (live) with practice tasks and feedback.",
       "startDatesNote": "Monthly intakes.",
       "priceNote": "Pricing details are available on our tuition fees page. We offer flexible payment options to help spread the cost, and a free laptop is available for learners who pay the full course fee upfront (terms and conditions apply).",
-      "heroImage": "/course-images/vocational/software-testing-manual.jpg",
+      "heroImage": "/images/courses/vocational/software-testing-manual.jpg",
       "imageAlt": "Software Testing Manual QA course"
     }
   ]

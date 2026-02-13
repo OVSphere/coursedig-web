@@ -9,9 +9,9 @@ type CourseItem = {
   category?: string | null;
   priceLabel?: string | null;
 
-  // ✅ NEW
-  imageSrc?: string | null;
-  imageAlt?: string | null;
+  // ✅ pass through DB image fields
+  imageSrc?: string | null; // should be course.heroImage
+  imageAlt?: string | null; // should be course.imageAlt (or title)
 };
 
 type Props = {
@@ -39,7 +39,9 @@ export default function PopularCourses({
         <div className="flex items-end justify-between gap-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
-            {subtitle ? <p className="mt-2 text-sm text-gray-700">{subtitle}</p> : null}
+            {subtitle ? (
+              <p className="mt-2 text-sm text-gray-700">{subtitle}</p>
+            ) : null}
           </div>
 
           {viewAllHref ? (

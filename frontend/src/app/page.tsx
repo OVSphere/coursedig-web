@@ -42,12 +42,17 @@ export default async function Home() {
           include: { fee: true },
         });
 
+  // ✅ IMPORTANT: pull image fields from the same place your course detail uses (heroImage + imageAlt)
   const popularCards = popularFinal.map((c) => ({
     title: c.title,
     slug: c.slug,
     shortDescription: c.shortDescription,
     category: c.category,
     priceLabel: c.fee?.amountPence ? formatMoneyGBP(c.fee.amountPence) : null,
+
+    // ✅ NEW: homepage cards now use the individual course image
+    imageSrc: c.heroImage || null,
+    imageAlt: c.imageAlt || c.title,
   }));
 
   return (
