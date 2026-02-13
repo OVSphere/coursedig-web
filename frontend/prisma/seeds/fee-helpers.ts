@@ -1,5 +1,5 @@
-// prisma/seeds/fee-helpers.ts
-import { PrismaClient } from "../../src/generated/prisma/client";
+// frontend/prisma/seeds/fee-helpers.ts
+import type { PrismaClient } from "@prisma/client";
 
 export type FeeRow = {
   courseSlug: string;
