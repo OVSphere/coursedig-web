@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build",
-    "start": "next start",
-    "postinstall": "prisma generate"
+    "start": "next start"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.985.0",
@@ -31,3 +30,4 @@
     "typescript": "^5"
   }
 }
+
