@@ -17,18 +17,15 @@ type Body = {
 
 export async function POST(
   req: Request,
-  ctx: { params: Promise<{ id: string }> } // ✅ Next dynamic params are async
+  ctx: { params: Promise<{ id: string }> } // ✅ Next dynamic params are async (in your build)
 ) {
   // 🔐 Super Admin role gate ONLY (password verified below)
   const gate = await requireSecureAdminApi();
 
   if (!gate.ok) {
+    // ✅ Fix: only compare against reasons that actually exist in the gate type
     return json(
-      gate.reason === "UNAUTHENTICATED"
-        ? "Unauthorised"
-        : gate.reason === "SECOND_FACTOR_REQUIRED"
-        ? "Additional admin verification required."
-        : "Forbidden",
+      gate.reason === "UNAUTHENTICATED" ? "Unauthorised" : "Forbidden",
       gate.status
     );
   }
@@ -51,6 +48,7 @@ export async function POST(
     return json("Justification must be at least 20 characters.", 400);
   }
 
+  // 🔐 Require super admin password (second factor)
   if (!secondFactor || secondFactor.length < 6) {
     return json("Super Admin password is required.", 400, {
       code: "SECOND_FACTOR_REQUIRED",
