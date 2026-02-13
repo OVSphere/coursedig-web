@@ -1,5 +1,5 @@
 // frontend/src/app/api/admin/applications/[id]/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 
@@ -9,15 +9,19 @@ function jsonErr(message: string, status = 400) {
   return NextResponse.json({ message }, { status });
 }
 
-export async function GET(_req: Request, ctx: { params: { id: string } }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const gate = await requireAdminApi();
   if (!gate.ok) return jsonErr("Not authorised.", gate.status);
 
-  const id = String(ctx?.params?.id || "").trim();
-  if (!id) return jsonErr("Missing application id.", 400);
+  const { id } = await params;
+  const appId = String(id || "").trim();
+  if (!appId) return jsonErr("Missing application id.", 400);
 
   const app = await prisma.application.findUnique({
-    where: { id },
+    where: { id: appId },
     select: {
       id: true,
       applicationType: true,
