@@ -39,12 +39,6 @@ const ENQUIRY_TYPES = [...ENQUIRY_TYPES_RAW].sort((a, b) =>
   a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
 );
 
-declare global {
-  interface Window {
-    turnstile?: any;
-  }
-}
-
 function normalizeSpaces(s: string) {
   return String(s || "").replace(/\s+/g, " ").trim();
 }
