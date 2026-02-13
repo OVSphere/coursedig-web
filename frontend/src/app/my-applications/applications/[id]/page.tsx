@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 
 type Attachment = {
   id: string;
@@ -60,8 +61,9 @@ function humanStatus(s?: string | null) {
   return s || "Submitted";
 }
 
-export default function MyApplicationDetailPage(props: { params: { id: string } }) {
-  const id = useMemo(() => String(props?.params?.id || "").trim(), [props?.params?.id]);
+export default function MyApplicationDetailPage() {
+  const params = useParams<{ id?: string }>();
+  const id = useMemo(() => String(params?.id || "").trim(), [params?.id]);
 
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -70,6 +72,7 @@ export default function MyApplicationDetailPage(props: { params: { id: string } 
   async function load() {
     if (!id) {
       setMsg("Missing application id.");
+      setApp(null);
       setLoading(false);
       return;
     }
@@ -217,7 +220,10 @@ export default function MyApplicationDetailPage(props: { params: { id: string } 
               </div>
 
               <p className="mt-4 text-xs text-gray-500">
-                If you need a file copy, use <Link href="/enquiry" className="font-semibold text-[color:var(--color-brand)] hover:underline">Enquiry</Link>{" "}
+                If you need a file copy, use{" "}
+                <Link href="/enquiry" className="font-semibold text-[color:var(--color-brand)] hover:underline">
+                  Enquiry
+                </Link>{" "}
                 and include your application reference.
               </p>
             </div>
