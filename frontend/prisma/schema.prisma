@@ -126,6 +126,12 @@ model Course {
   priceNote         String?
   published         Boolean    @default(false)
   sortOrder         Int        @default(0)
+
+  // ✅ add these back (used by homepage/admin ranking)
+  homePopularRank   Int?
+  homeLevel45Rank   Int?
+  homeLevel7Rank    Int?
+
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
   heroImage         String?

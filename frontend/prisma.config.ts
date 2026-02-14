@@ -1,13 +1,15 @@
 // frontend/prisma.config.ts
+import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
 export default defineConfig({
+  // ✅ Needed for migrate dev / migrate deploy
   datasource: {
-    // Prisma v7 requires datasource.url in prisma.config.ts for migrate deploy
     url: process.env.DATABASE_URL,
   },
+
+  // ✅ Allows `npx prisma db seed`
   migrations: {
-    // Seed script (used by `npx prisma db seed`)
     seed: "npx tsx ./prisma/seed.ts",
   },
 });
