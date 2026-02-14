@@ -1,17 +1,17 @@
 // frontend/src/app/api/courses/route.ts
 import { NextResponse } from "next/server";
-import { getPrismaServer } from "@/lib/prisma-server";
+import { prisma } from "@/lib/prisma"; // Updated to match the lib/prisma.ts singleton
 
-// ✅ IMPORTANT: ensure Node runtime (not Edge) so env + pg work reliably on Amplify SSR
+// 💡 FORCE dynamic rendering so it reads the DATABASE_URL at RUNTIME, not build time.
+export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   try {
-    const { prisma } = getPrismaServer();
-
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") || "").trim();
 
+    // Using the prisma singleton directly
     const courses = await prisma.course.findMany({
       where: {
         published: true,
