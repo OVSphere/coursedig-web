@@ -13,7 +13,6 @@ const globalForPrisma = globalThis as unknown as {
 function resolveConnectionString() {
   const cs = process.env.DATABASE_DIRECT_URL || process.env.DATABASE_URL;
 
-  // ✅ Fail fast (prevents accidental 127.0.0.1 / localhost attempts)
   if (!cs) {
     throw new Error(
       "Missing DATABASE_URL (or DATABASE_DIRECT_URL). Set it in your environment (Amplify / local .env)."
@@ -24,7 +23,6 @@ function resolveConnectionString() {
 }
 
 function shouldUseSsl(connectionString: string) {
-  // Apply ssl config when sslmode indicates TLS (RDS commonly uses sslmode=require)
   return (
     connectionString.includes("sslmode=require") ||
     connectionString.includes("sslmode=verify-full") ||
@@ -36,16 +34,19 @@ function shouldUseSsl(connectionString: string) {
 function makeClient() {
   const connectionString = resolveConnectionString();
 
-  // ✅ Reuse pool across dev hot reload AND warm serverless invocations
-  if (!globalForPrisma.pgPool) {
-    globalForPrisma.pgPool = new Pool({
+  const pool =
+    globalForPrisma.pgPool ??
+    new Pool({
       connectionString,
       max: 10,
       ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
     });
+
+  if (process.env.NODE_ENV !== "production") {
+    globalForPrisma.pgPool = pool;
   }
 
-  const adapter = new PrismaPg(globalForPrisma.pgPool);
+  const adapter = new PrismaPg(pool);
 
   return new PrismaClient({
     adapter,
@@ -53,8 +54,8 @@ function makeClient() {
   });
 }
 
-if (!globalForPrisma.prisma) {
-  globalForPrisma.prisma = makeClient();
-}
+export const prisma = globalForPrisma.prisma ?? makeClient();
 
-export const prisma = globalForPrisma.prisma;
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}

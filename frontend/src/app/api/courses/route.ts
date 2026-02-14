@@ -1,11 +1,9 @@
+// frontend/src/app/api/courses/route.ts
 import { NextResponse } from "next/server";
 import { getPrismaServer } from "@/lib/prisma-server";
 
-// Ensure this runs on Node.js (pg/Prisma adapter needs Node, not Edge)
+// ✅ Ensure this route always runs on Node (NOT Edge)
 export const runtime = "nodejs";
-
-// Avoid any static optimisation/build-time execution
-export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
