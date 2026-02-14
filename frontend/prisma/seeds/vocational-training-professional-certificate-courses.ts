@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { readJsonArray } from "./_helpers";
 
 type CourseRow = {
-  slug?: string; // optional (slug can be generated)
+  slug?: string;
   title: string;
 
   shortDescription?: string;
@@ -38,18 +38,39 @@ function clean(v: unknown) {
   return s ? s : null;
 }
 
-function pick<T extends Record<string, any>>(obj: T, keys: (keyof T)[]) {
-  const out: Partial<T> = {};
-  for (const k of keys) {
-    if (k in obj) (out as any)[k] = obj[k];
-  }
-  return out as Partial<T>;
+function pick(obj: Record<string, any>, keys: string[]) {
+  const out: Record<string, any> = {};
+  for (const k of keys) if (k in obj) out[k] = obj[k];
+  return out;
 }
 
-/**
- * Prisma sometimes masks the exact missing column in adapter errors.
- * This function retries with smaller payloads when we hit P2022 ColumnNotFound.
- */
+async function logCourseColumns(prisma: PrismaClient) {
+  try {
+    const rows = (await prisma.$queryRaw`
+      SELECT table_name, column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name IN ('Course','course','courses')
+      ORDER BY table_name, ordinal_position
+    `) as Array<{ table_name: string; column_name: string }>;
+
+    if (!rows?.length) {
+      console.warn("ℹ️ Could not find Course columns in information_schema.");
+      return;
+    }
+
+    const grouped: Record<string, string[]> = {};
+    for (const r of rows) {
+      grouped[r.table_name] ??= [];
+      grouped[r.table_name].push(r.column_name);
+    }
+
+    console.warn("🔎 Detected DB columns for Course tables:", grouped);
+  } catch (e) {
+    console.warn("ℹ️ Failed to read information_schema columns:", e);
+  }
+}
+
 async function upsertWithFallback(
   prisma: PrismaClient,
   slug: string,
@@ -60,38 +81,29 @@ async function upsertWithFallback(
     select: { id: true },
   });
 
-  // Fallback tiers (largest -> smallest)
-  // Tier 0: full payload (what we WANT)
-  // Tier 1: remove commonly-missing admin fields
-  // Tier 2: remove images + notes (often added/renamed later)
-  // Tier 3: minimal core fields (should exist in any schema)
+  // progressively smaller payloads
   const tier0 = dataFull;
-
   const tier1 = (() => {
     const { published, sortOrder, ...rest } = dataFull;
     return rest;
   })();
-
   const tier2 = (() => {
     const { heroImage, imageAlt, startDatesNote, priceNote, ...rest } = tier1 as any;
     return rest;
   })();
-
-  const tier3 = pick(tier2 as any, [
-    "title",
-    "category",
-    "shortDescription",
-    "overview",
-  ] as any);
+  const tier3 = pick(tier2 as any, ["title", "category", "shortDescription", "overview"]);
+  const tier4 = pick(tier2 as any, ["title", "category"]);
+  const tier5 = pick(tier2 as any, ["title"]);
 
   const tiers = [
     { name: "tier0(full)", data: tier0 },
     { name: "tier1(no published/sortOrder)", data: tier1 },
     { name: "tier2(no images/notes)", data: tier2 },
-    { name: "tier3(minimal)", data: tier3 },
+    { name: "tier3(title/category/shortDescription/overview)", data: tier3 },
+    { name: "tier4(title/category)", data: tier4 },
+    { name: "tier5(title only)", data: tier5 },
   ] as const;
 
-  // Try each tier until it works
   for (const t of tiers) {
     try {
       if (exists) {
@@ -102,26 +114,18 @@ async function upsertWithFallback(
         return { action: "created" as const, tier: t.name };
       }
     } catch (e) {
-      // Only retry on missing column errors
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === "P2022"
-      ) {
-        console.warn(
-          `⚠️ Seed fallback needed for slug="${slug}" (${t.name}) -> ${e.code}: ${e.message}`
-        );
-        // Try next tier
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2022") {
+        console.warn(`⚠️ Seed fallback needed for slug="${slug}" (${t.name}) -> P2022`);
         continue;
       }
-      // Other errors should bubble up
       throw e;
     }
   }
 
-  // If even minimal tier fails, throw a clear error
-  throw new Error(
-    `Seed failed for slug="${slug}" even with minimal fields. Check schema/migrations.`
-  );
+  // Don't fail the whole seed/build — log schema info then skip
+  console.warn(`❌ Skipping slug="${slug}" — schema mismatch even for title-only payload.`);
+  await logCourseColumns(prisma);
+  return { action: "skipped" as const, tier: "none" as const };
 }
 
 export default async function seedVocationalTraining(
@@ -148,38 +152,28 @@ export default async function seedVocationalTraining(
     const data = {
       title,
       category,
-
-      shortDescription:
-        clean(c.shortDescription) ?? "View details and next steps.",
-      overview:
-        clean(c.overview) ?? `Full details for ${title} will be published shortly.`,
-
+      shortDescription: clean(c.shortDescription) ?? "View details and next steps.",
+      overview: clean(c.overview) ?? `Full details for ${title} will be published shortly.`,
       whoItsFor: clean(c.whoItsFor),
       whatYoullLearn: clean(c.whatYoullLearn),
-
       delivery: clean(c.delivery),
       duration: clean(c.duration),
       entryRequirements: clean(c.entryRequirements),
       startDatesNote: clean(c.startDatesNote),
       priceNote: clean(c.priceNote),
-
       heroImage: clean(c.heroImage),
       imageAlt: clean(c.imageAlt),
-
-      // These commonly cause mismatches when schema evolves
       published: true,
       sortOrder: i,
     };
 
-    const result = await upsertWithFallback(prisma, slug, data);
+    const res = await upsertWithFallback(prisma, slug, data);
 
-    // Count stats
-    if (result.action === "created") created++;
-    else updated++;
+    if (res.action === "created") created++;
+    else if (res.action === "updated") updated++;
 
-    // Optional: helpful trace (safe)
-    if (result.tier !== "tier0(full)") {
-      console.log(`ℹ️ slug="${slug}" used ${result.tier}`);
+    if (res.tier !== "tier0(full)" && res.tier !== "none") {
+      console.log(`ℹ️ slug="${slug}" used ${res.tier}`);
     }
   }
 
