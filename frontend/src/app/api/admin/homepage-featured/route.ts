@@ -1,9 +1,10 @@
 // frontend/src/app/api/admin/homepage-featured/route.ts
-// ✅ NEW (CourseDig): Manage homepage featured ranks (Admin + Super Admin) + Audit Trail
+// ✅ CourseDig: Manage homepage featured ranks (Admin + Super Admin) + Audit Trail
+// Updated to use the single Prisma entrypoint "@/lib/prisma" (no mixed clients / no localhost fallback risk)
 
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin";
-import { getPrismaServer } from "@/lib/prisma-server";
+import { prisma } from "@/lib/prisma";
 
 // Best-effort: capture IP/user-agent (works behind proxies if x-forwarded-for is set)
 function getIp(req: Request) {
@@ -20,8 +21,6 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") || "").trim();
-
-  const { prisma } = getPrismaServer();
 
   const items = await prisma.course.findMany({
     where: q
@@ -60,15 +59,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Forbidden" }, { status: gate.status });
   }
 
-  const { prisma } = getPrismaServer();
-
   const body = (await req.json().catch(() => ({}))) as Partial<Body>;
   const id = String(body.id || "").trim();
   const section = body.section;
   const rankRaw = body.rank;
 
-  if (!id) return NextResponse.json({ message: "Missing course id." }, { status: 400 });
-  if (!section) return NextResponse.json({ message: "Missing section." }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ message: "Missing course id." }, { status: 400 });
+  }
+  if (!section) {
+    return NextResponse.json({ message: "Missing section." }, { status: 400 });
+  }
 
   const rank =
     rankRaw === null || rankRaw === undefined || rankRaw === ("" as any)
