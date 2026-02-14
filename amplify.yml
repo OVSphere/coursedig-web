@@ -5,11 +5,12 @@ applications:
       phases:
         preBuild:
           commands:
-            - npm ci --include=dev --no-audit
+            - npm ci --include=dev --no-audit --ignore-scripts
             - npx prisma generate
         build:
           commands:
-            - DATABASE_URL=$DATABASE_URL npx prisma migrate deploy
+            - npx prisma migrate deploy
+            - npx prisma db seed
             - npm run build
       artifacts:
         baseDirectory: .next
@@ -19,7 +20,3 @@ applications:
         paths:
           - node_modules/**/*
           - .next/cache/**/*
-    # ADD THIS SECTION BELOW
-    environmentVariables:
-      DATABASE_URL: ${DATABASE_URL}
-      DATABASE_DIRECT_URL: ${DATABASE_DIRECT_URL}
