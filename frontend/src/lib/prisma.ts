@@ -1,4 +1,6 @@
 // frontend/src/lib/prisma.ts
+import "server-only";
+
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -22,8 +24,7 @@ function resolveConnectionString() {
 }
 
 function shouldUseSsl(connectionString: string) {
-  // We only apply ssl config when sslmode is present and indicates TLS.
-  // (RDS commonly uses sslmode=require)
+  // Apply ssl config when sslmode indicates TLS (RDS commonly uses sslmode=require)
   return (
     connectionString.includes("sslmode=require") ||
     connectionString.includes("sslmode=verify-full") ||
@@ -35,21 +36,16 @@ function shouldUseSsl(connectionString: string) {
 function makeClient() {
   const connectionString = resolveConnectionString();
 
-  const pool =
-    globalForPrisma.pgPool ??
-    new Pool({
+  // ✅ Reuse pool across dev hot reload AND warm serverless invocations
+  if (!globalForPrisma.pgPool) {
+    globalForPrisma.pgPool = new Pool({
       connectionString,
       max: 10,
-      // ✅ RDS/hosted PG safe default when sslmode is on
       ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
     });
-
-  // Reuse the pool in dev/hot reload
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.pgPool = pool;
   }
 
-  const adapter = new PrismaPg(pool);
+  const adapter = new PrismaPg(globalForPrisma.pgPool);
 
   return new PrismaClient({
     adapter,
@@ -57,8 +53,8 @@ function makeClient() {
   });
 }
 
-export const prisma = globalForPrisma.prisma ?? makeClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+if (!globalForPrisma.prisma) {
+  globalForPrisma.prisma = makeClient();
 }
+
+export const prisma = globalForPrisma.prisma;
