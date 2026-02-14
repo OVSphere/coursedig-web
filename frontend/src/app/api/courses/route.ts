@@ -1,11 +1,18 @@
-//"C:\Users\murio\coursedig-web\frontend\src\app\api\courses\route.ts"
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+//varimport { NextResponse } from "next/server";
+import { getPrismaServer } from "@/lib/prisma-server";
+
+// Force Node runtime (pg + Prisma adapter-pg require Node, not Edge)
+export const runtime = "nodejs";
+
+// Avoid any static optimisation / build-time execution
+export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") || "").trim();
+
+    const { prisma } = getPrismaServer();
 
     const courses = await prisma.course.findMany({
       where: {
@@ -20,11 +27,7 @@ export async function GET(req: Request) {
             }
           : {}),
       },
-      orderBy: [
-        { category: "asc" },
-        { sortOrder: "asc" },
-        { title: "asc" },
-      ],
+      orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { title: "asc" }],
       select: {
         id: true,
         slug: true,
@@ -36,7 +39,6 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ courses }, { status: 200 });
-
   } catch (error: any) {
     console.error("COURSES_API_ERROR:", error);
 
