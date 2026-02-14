@@ -2,8 +2,9 @@
 import { NextResponse } from "next/server";
 import { getPrismaServer } from "@/lib/prisma-server";
 
-// ✅ Ensure this route always runs on Node (NOT Edge)
+// ✅ Ensure env vars exist at runtime (Edge runtimes often won't have them)
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
@@ -39,7 +40,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ courses }, { status: 200 });
   } catch (error: any) {
     console.error("COURSES_API_ERROR:", error);
-
     return NextResponse.json(
       {
         message: "Failed to load courses.",

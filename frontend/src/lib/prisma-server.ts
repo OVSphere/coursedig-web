@@ -1,8 +1,8 @@
 // frontend/src/lib/prisma-server.ts
+import "server-only";
+
 // ✅ CourseDig: Server-only Prisma client using adapter-pg (Prisma 7 compatible)
 // Fixes: runtime DB env handling (no localhost fallback), stable pooling in prod + dev
-
-import "server-only";
 
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -15,18 +15,16 @@ declare global {
   var __coursedigPgPool: Pool | undefined;
 }
 
-/**
- * Prefer DIRECT_URL when available (useful for migrations/seed),
- * otherwise use DATABASE_URL for runtime.
- * Never fall back to localhost.
- */
 function getConnectionString() {
+  // Prefer DIRECT_URL, else DATABASE_URL
   const cs = process.env.DATABASE_DIRECT_URL || process.env.DATABASE_URL;
+
   if (!cs) {
     throw new Error(
       "Missing DATABASE_URL (or DATABASE_DIRECT_URL). Set it in Amplify env vars (and local .env when running locally)."
     );
   }
+
   return cs;
 }
 
@@ -42,11 +40,6 @@ function shouldUseSsl(connectionString: string) {
 export function getPrismaServer() {
   const connectionString = getConnectionString();
 
-  /**
-   * Always reuse pool/client across invocations when possible.
-   * - In production (Amplify SSR/Lambda), reuse globals to avoid opening new connections per request.
-   * - In dev, reuse globals to survive hot reload.
-   */
   if (!global.__coursedigPgPool) {
     global.__coursedigPgPool = new Pool({
       connectionString,

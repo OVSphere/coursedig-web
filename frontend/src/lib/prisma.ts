@@ -15,7 +15,7 @@ function resolveConnectionString() {
 
   if (!cs) {
     throw new Error(
-      "Missing DATABASE_URL (or DATABASE_DIRECT_URL). Set it in your environment (Amplify / local .env)."
+      "Missing DATABASE_URL (or DATABASE_DIRECT_URL). Set it in Amplify env vars (and local .env when running locally)."
     );
   }
 
