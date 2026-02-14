@@ -1,23 +1,23 @@
 version: 1
 applications:
-  - appRoot: frontend
+  - appRoot: frontend # Amplify enters the 'frontend' folder first
     frontend:
       phases:
         preBuild:
           commands:
             - npm ci --include=dev --no-audit
-            # Force the generation of the Prisma Client using the build-time env vars
             - npx prisma generate
         build:
           commands:
-            # Explicitly pass the URL to the migration command
+            # Note: Do NOT use 'frontend/node_modules', just 'node_modules'
             - DATABASE_URL=$DATABASE_URL npx prisma migrate deploy
             - npm run build
       artifacts:
-        baseDirectory: frontend/.next
+        # Relative to 'frontend/' folder
+        baseDirectory: .next 
         files:
           - "**/*"
       cache:
         paths:
-          - frontend/node_modules/**/*
-          - frontend/.next/cache/**/*
+          - node_modules/**/*
+          - .next/cache/**/*
