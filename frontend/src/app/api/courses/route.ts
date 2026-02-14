@@ -2,16 +2,15 @@
 import { NextResponse } from "next/server";
 import { getPrismaServer } from "@/lib/prisma-server";
 
-// ✅ Ensure env vars exist at runtime (Edge runtimes often won't have them)
+// ✅ IMPORTANT: ensure Node runtime (not Edge) so env + pg work reliably on Amplify SSR
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
+    const { prisma } = getPrismaServer();
+
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") || "").trim();
-
-    const { prisma } = getPrismaServer();
 
     const courses = await prisma.course.findMany({
       where: {
@@ -40,6 +39,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ courses }, { status: 200 });
   } catch (error: any) {
     console.error("COURSES_API_ERROR:", error);
+
     return NextResponse.json(
       {
         message: "Failed to load courses.",

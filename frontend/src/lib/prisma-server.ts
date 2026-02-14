@@ -1,8 +1,8 @@
 // frontend/src/lib/prisma-server.ts
-import "server-only";
-
 // ✅ CourseDig: Server-only Prisma client using adapter-pg (Prisma 7 compatible)
 // Fixes: runtime DB env handling (no localhost fallback), stable pooling in prod + dev
+
+import "server-only";
 
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -16,7 +16,6 @@ declare global {
 }
 
 function getConnectionString() {
-  // Prefer DIRECT_URL, else DATABASE_URL
   const cs = process.env.DATABASE_DIRECT_URL || process.env.DATABASE_URL;
 
   if (!cs) {
