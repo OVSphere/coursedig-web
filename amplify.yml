@@ -6,29 +6,16 @@ applications:
         preBuild:
           commands:
             - npm ci --include=dev --no-audit --ignore-scripts
-
-            # Export DATABASE_URL from Amplify secrets into env for Prisma
-            - export DATABASE_URL=$(node -e "console.log(JSON.parse(process.env.secrets || '{}').DATABASE_URL || '')")
-            - export DATABASE_DIRECT_URL=$(node -e "console.log(JSON.parse(process.env.secrets || '{}').DATABASE_DIRECT_URL || '')")
-
-            # Safety check (prints true/false only)
-            - node -e "const s=JSON.parse(process.env.secrets||'{}'); console.log('hasSecretDBURL', !!s.DATABASE_URL)"
-
             - npx prisma generate
-
         build:
           commands:
-            - export DATABASE_URL=$(node -e "console.log(JSON.parse(process.env.secrets || '{}').DATABASE_URL || '')")
-            - export DATABASE_DIRECT_URL=$(node -e "console.log(JSON.parse(process.env.secrets || '{}').DATABASE_DIRECT_URL || '')")
             - npx prisma migrate deploy
             - npx prisma db seed
             - npm run build
-
       artifacts:
         baseDirectory: .next
         files:
           - "**/*"
-
       cache:
         paths:
           - node_modules/**/*
