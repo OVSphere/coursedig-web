@@ -9,7 +9,9 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function makeClient() {
+  // Prefer direct URL if set (recommended), otherwise fallback.
   const connectionString =
+    process.env.DATABASE_DIRECT_URL ||
     process.env.DATABASE_URL ||
     "postgresql://invalid:invalid@localhost:5432/invalid?schema=public";
 
@@ -18,8 +20,17 @@ function makeClient() {
     new Pool({
       connectionString,
       max: 10,
+
+      // Important for AWS RDS + many hosted Postgres providers.
+      // Prevents TLS handshake failures when certificates aren’t validated by the runtime.
+      ssl:
+        connectionString.includes("sslmode=require") ||
+        connectionString.includes("sslmode=verify-full")
+          ? { rejectUnauthorized: false }
+          : undefined,
     });
 
+  // Reuse the pool in dev/hot reload
   if (process.env.NODE_ENV !== "production") {
     globalForPrisma.pgPool = pool;
   }

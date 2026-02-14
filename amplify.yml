@@ -6,11 +6,10 @@ applications:
         preBuild:
           commands:
             - npm ci --include=dev --no-audit
-            - echo "DATABASE_URL=$DATABASE_URL" > .env
-            - echo "DATABASE_DIRECT_URL=$DATABASE_DIRECT_URL" >> .env
             - npx prisma generate
         build:
           commands:
+            - npx prisma migrate deploy
             - npm run build
       artifacts:
         baseDirectory: .next

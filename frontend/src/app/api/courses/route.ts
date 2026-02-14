@@ -1,3 +1,4 @@
+//"C:\Users\murio\coursedig-web\frontend\src\app\api\courses\route.ts"
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -35,10 +36,16 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ courses }, { status: 200 });
-  } catch (error) {
+
+  } catch (error: any) {
     console.error("COURSES_API_ERROR:", error);
+
     return NextResponse.json(
-      { message: "Failed to load courses." },
+      {
+        message: "Failed to load courses.",
+        error: error?.message ?? String(error),
+        code: error?.code ?? null,
+      },
       { status: 500 }
     );
   }
