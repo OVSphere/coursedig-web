@@ -1,10 +1,10 @@
-//varimport { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getPrismaServer } from "@/lib/prisma-server";
 
-// Force Node runtime (pg + Prisma adapter-pg require Node, not Edge)
+// Ensure this runs on Node.js (pg/Prisma adapter needs Node, not Edge)
 export const runtime = "nodejs";
 
-// Avoid any static optimisation / build-time execution
+// Avoid any static optimisation/build-time execution
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
