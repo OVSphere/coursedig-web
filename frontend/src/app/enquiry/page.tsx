@@ -4,6 +4,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
+// ✅ Use the shared Turnstile component (stable + no jitter)
+import TurnstileWidget from "@/app/components/TurnstileWidget";
+
 type EnquiryType =
   | "GENERAL"
   | "COURSE"
@@ -18,21 +21,49 @@ type EnquiryType =
 const MIN_MESSAGE_CHARS = 200;
 const MAX_MESSAGE_CHARS = 2000;
 
-// ⚠️ NOTE about “minimum 5 words” for full name:
-// A full name is typically 2–4 words. Requiring 5 will block many genuine users.
-// I implemented MIN 2 words (first + last). If you truly want 5, change MIN_NAME_WORDS to 5.
+// ⚠️ NOTE: Full names are usually 2–4 words.
+// This is set to 2 to avoid blocking real users.
 const MIN_NAME_WORDS = 2;
 
-const ENQUIRY_TYPES_RAW: { value: EnquiryType; label: string; hint: string }[] = [
-  { value: "GENERAL", label: "General enquiry", hint: "Questions about CourseDig or our services." },
-  { value: "COURSE", label: "Course enquiry", hint: "Ask about a course, start dates, entry requirements, etc." },
-  { value: "SCHOLARSHIP", label: "Scholarship enquiry", hint: "Ask about scholarship eligibility and process." },
-  { value: "APPLICATION_PROGRESS", label: "Application progress / update", hint: "Check status, update details, upload missing docs." },
-  { value: "PAYMENTS", label: "Payments / fees", hint: "Tuition fees, invoices, payment confirmation." },
-  { value: "TECH_SUPPORT", label: "Technical support", hint: "Website issues or access problems." },
-  { value: "PARTNERSHIP", label: "Partnership / corporate training", hint: "Business partnerships or corporate training." },
-  { value: "OTHER", label: "Other", hint: "Anything else." },
-];
+const ENQUIRY_TYPES_RAW: { value: EnquiryType; label: string; hint: string }[] =
+  [
+    {
+      value: "GENERAL",
+      label: "General enquiry",
+      hint: "Questions about CourseDig or our services.",
+    },
+    {
+      value: "COURSE",
+      label: "Course enquiry",
+      hint: "Ask about a course, start dates, entry requirements, etc.",
+    },
+    {
+      value: "SCHOLARSHIP",
+      label: "Scholarship enquiry",
+      hint: "Ask about scholarship eligibility and process.",
+    },
+    {
+      value: "APPLICATION_PROGRESS",
+      label: "Application progress / update",
+      hint: "Check status, update details, upload missing docs.",
+    },
+    {
+      value: "PAYMENTS",
+      label: "Payments / fees",
+      hint: "Tuition fees, invoices, payment confirmation.",
+    },
+    {
+      value: "TECH_SUPPORT",
+      label: "Technical support",
+      hint: "Website issues or access problems.",
+    },
+    {
+      value: "PARTNERSHIP",
+      label: "Partnership / corporate training",
+      hint: "Business partnerships or corporate training.",
+    },
+    { value: "OTHER", label: "Other", hint: "Anything else." },
+  ];
 
 // ✅ Alphabetical order by label
 const ENQUIRY_TYPES = [...ENQUIRY_TYPES_RAW].sort((a, b) =>
@@ -63,18 +94,25 @@ export default function EnquiryPage() {
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
 
-  // Conditional fields
+  // Conditional fields (kept for API payload compatibility)
   const [courseInterestedIn, setCourseInterestedIn] = useState("");
   const [preferredStartDate, setPreferredStartDate] = useState("");
-  const [studyMode, setStudyMode] = useState<"ONLINE" | "IN_PERSON" | "HYBRID" | "">("");
+  const [studyMode, setStudyMode] = useState<"ONLINE" | "IN_PERSON" | "HYBRID" | "">(
+    ""
+  );
   const [scholarshipType, setScholarshipType] = useState("");
   const [applicationRef, setApplicationRef] = useState("");
   const [paymentRef, setPaymentRef] = useState("");
-  const [bestContactMethod, setBestContactMethod] = useState<"EMAIL" | "PHONE" | "WHATSAPP" | "">("");
+  const [bestContactMethod, setBestContactMethod] = useState<
+    "EMAIL" | "PHONE" | "WHATSAPP" | ""
+  >("");
 
   // Anti-abuse
   const [hp, setHp] = useState("");
+
+  // Turnstile
   const [turnstileToken, setTurnstileToken] = useState<string>("");
+  const [captchaResetSignal, setCaptchaResetSignal] = useState<number>(0);
 
   // UI states
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,8 +124,9 @@ export default function EnquiryPage() {
   const [touchedEmail, setTouchedEmail] = useState(false);
   const [touchedMessage, setTouchedMessage] = useState(false);
 
+  // ✅ Only show captcha when the user is actually ready to submit (prevents "Success!" on empty form)
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
-  const widgetRef = useRef<HTMLDivElement | null>(null);
+  const captchaRequired = !!siteKey;
 
   const nameWords = useMemo(() => countWords(fullName), [fullName]);
   const nameOk = useMemo(() => nameWords >= MIN_NAME_WORDS, [nameWords]);
@@ -100,58 +139,72 @@ export default function EnquiryPage() {
     [msgLen]
   );
 
+  // Conditional: application progress requires ref
+  const appRefOk = useMemo(() => {
+    if (enquiryType !== "APPLICATION_PROGRESS") return true;
+    return normalizeSpaces(applicationRef).length >= 6;
+  }, [enquiryType, applicationRef]);
+
+  // ✅ Gate captcha rendering until core fields are valid enough
+  const readyForCaptcha = useMemo(() => {
+    if (!captchaRequired) return false;
+    if (!nameOk) return false;
+    if (!emailOk) return false;
+    if (!msgOk) return false;
+    if (!appRefOk) return false;
+    return true;
+  }, [captchaRequired, nameOk, emailOk, msgOk, appRefOk]);
+
   const isValid = useMemo(() => {
     if (!nameOk) return false;
     if (!emailOk) return false;
     if (!msgOk) return false;
+    if (!appRefOk) return false;
 
-    // Optional conditional requirement
-    if (enquiryType === "APPLICATION_PROGRESS" && normalizeSpaces(applicationRef).length < 6) {
-      return false;
-    }
-
-    // Turnstile enforcement only if site key configured
-    if (siteKey && !turnstileToken) return false;
+    // Turnstile token required only if configured AND widget rendered
+    if (captchaRequired && !turnstileToken) return false;
 
     return true;
-  }, [nameOk, emailOk, msgOk, enquiryType, applicationRef, siteKey, turnstileToken]);
+  }, [nameOk, emailOk, msgOk, appRefOk, captchaRequired, turnstileToken]);
 
   const typeHint = useMemo(
     () => ENQUIRY_TYPES.find((t) => t.value === enquiryType)?.hint || "",
     [enquiryType]
   );
 
-  // Turnstile render (if configured)
+  // ✅ If user changes key fields after captcha success, force them to re-check (prevents reusing old token)
+  const lastCaptchaInputsRef = useRef<string>("");
+
   useEffect(() => {
-    if (!siteKey) return;
+    if (!captchaRequired) return;
 
-    const existing = document.querySelector('script[data-cf-turnstile="1"]');
-    if (existing) return;
+    const fingerprint = JSON.stringify({
+      enquiryType,
+      fullName: normalizeSpaces(fullName),
+      email: String(email || "").trim().toLowerCase(),
+      msgLen,
+      applicationRef: normalizeSpaces(applicationRef),
+    });
 
-    const s = document.createElement("script");
-    s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    s.async = true;
-    s.defer = true;
-    s.dataset.cfTurnstile = "1";
+    if (!lastCaptchaInputsRef.current) {
+      lastCaptchaInputsRef.current = fingerprint;
+      return;
+    }
 
-    s.onload = () => {
-      if (!widgetRef.current || !window.turnstile) return;
-
-      try {
-        window.turnstile.render(widgetRef.current, {
-          sitekey: siteKey,
-          theme: "light",
-          callback: (token: string) => setTurnstileToken(token),
-          "expired-callback": () => setTurnstileToken(""),
-          "error-callback": () => setTurnstileToken(""),
-        });
-      } catch {
-        // no-op
-      }
-    };
-
-    document.body.appendChild(s);
-  }, [siteKey]);
+    if (fingerprint !== lastCaptchaInputsRef.current && turnstileToken) {
+      setTurnstileToken("");
+      setCaptchaResetSignal((n) => n + 1);
+      lastCaptchaInputsRef.current = fingerprint;
+    }
+  }, [
+    captchaRequired,
+    enquiryType,
+    fullName,
+    email,
+    msgLen,
+    applicationRef,
+    turnstileToken,
+  ]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -163,6 +216,7 @@ export default function EnquiryPage() {
     setTouchedMessage(true);
 
     if (!isValid) return;
+
     setIsSubmitting(true);
 
     try {
@@ -172,7 +226,7 @@ export default function EnquiryPage() {
         body: JSON.stringify({
           enquiryType,
           fullName: normalizeSpaces(fullName),
-          email: String(email).trim(),
+          email: String(email).trim().toLowerCase(),
           phone,
           message, // keep exact message
           courseInterestedIn,
@@ -191,12 +245,17 @@ export default function EnquiryPage() {
 
       if (!res.ok) {
         setSubmitError(data?.message ?? "Something went wrong. Please try again.");
+        // If server rejects captcha, reset it for a clean retry
+        setTurnstileToken("");
+        setCaptchaResetSignal((n) => n + 1);
         return;
       }
 
       setEnquiryRef(data.enquiryRef);
     } catch {
       setSubmitError("Network error. Please try again.");
+      setTurnstileToken("");
+      setCaptchaResetSignal((n) => n + 1);
     } finally {
       setIsSubmitting(false);
     }
@@ -206,10 +265,10 @@ export default function EnquiryPage() {
     <main className="bg-white">
       <section className="border-b bg-[color:var(--color-brand-soft)]">
         <div className="mx-auto max-w-3xl px-6 py-12">
-          <h1 className="text-3xl font-bold text-gray-900">Contact & Enquiries</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Contact &amp; Enquiries</h1>
           <p className="mt-2 text-sm text-gray-700">
-            Use this form for general questions, course and scholarship enquiries, payment queries, or application progress.
-            You can also browse all courses{" "}
+            Use this form for general questions, course and scholarship enquiries, payment queries, or
+            application progress. You can also browse all courses{" "}
             <Link
               href="/courses"
               className="font-semibold text-[color:var(--color-brand)] hover:underline"
@@ -229,11 +288,10 @@ export default function EnquiryPage() {
                 Thank you — your enquiry has been received.
               </p>
               <p className="mt-2 text-sm text-gray-700">
-                Your reference: <span className="font-mono font-semibold">{enquiryRef}</span>
+                Your reference:{" "}
+                <span className="font-mono font-semibold">{enquiryRef}</span>
               </p>
-              <p className="mt-2 text-sm text-gray-600">
-                We’ll respond by email as soon as possible.
-              </p>
+              <p className="mt-2 text-sm text-gray-600">We’ll respond by email as soon as possible.</p>
 
               <div className="mt-6 flex gap-3">
                 <Link
@@ -337,6 +395,11 @@ export default function EnquiryPage() {
                   <p className="text-xs text-gray-600">
                     Include the reference shown after submission (or from your email receipt).
                   </p>
+                  {touchedMessage && !appRefOk && (
+                    <p className="text-xs text-red-600">
+                      Please enter a valid application reference (at least 6 characters).
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -347,7 +410,6 @@ export default function EnquiryPage() {
                   value={message}
                   onChange={(e) => {
                     const v = e.target.value || "";
-                    // ✅ enforce max 2000 on input (hard limit)
                     setMessage(v.length > MAX_MESSAGE_CHARS ? v.slice(0, MAX_MESSAGE_CHARS) : v);
                   }}
                   onBlur={() => setTouchedMessage(true)}
@@ -390,16 +452,36 @@ export default function EnquiryPage() {
                 />
               </div>
 
-              {/* Turnstile widget */}
-              {siteKey ? (
+              {/* Turnstile widget — only render when user is ready (prevents instant "Success") */}
+              {captchaRequired && (
                 <div className="rounded-2xl border border-gray-200 bg-white p-4">
                   <p className="text-xs font-semibold text-gray-500">SECURITY CHECK</p>
-                  <div className="mt-3" ref={widgetRef} />
+
+                  {readyForCaptcha ? (
+                    <div className="mt-3">
+                      <TurnstileWidget
+                        onToken={(t) => setTurnstileToken(t)}
+                        theme="light"
+                        resetSignal={captchaResetSignal}
+                      />
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-gray-600">
+                      Please complete the form above to enable the security check.
+                    </p>
+                  )}
+
                   <p className="mt-2 text-xs text-gray-600">
                     This helps us reduce spam and keep the service safe.
                   </p>
+
+                  {readyForCaptcha && !turnstileToken && (
+                    <p className="mt-2 text-xs text-red-600">
+                      Please complete the security check to continue.
+                    </p>
+                  )}
                 </div>
-              ) : null}
+              )}
 
               {submitError && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">

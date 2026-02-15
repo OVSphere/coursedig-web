@@ -12,11 +12,39 @@ applications:
             # 1) Create env file from Amplify Console env vars (build-time)
             - rm -f .env.production
 
+            # --- App env (recommended) ---
+            - printf "NODE_ENV=%s\n" "${NODE_ENV:-production}" >> .env.production
+
             # --- DB (required) ---
             - printf "DATABASE_URL=%s\n" "$DATABASE_URL" >> .env.production
             - printf "DATABASE_DIRECT_URL=%s\n" "$DATABASE_DIRECT_URL" >> .env.production
 
-            # --- Email / SMTP (add these) ---
+            # --- Core app config ---
+            - printf "APP_BASE_URL=%s\n" "$APP_BASE_URL" >> .env.production
+            - printf "SESSION_COOKIE_NAME=%s\n" "$SESSION_COOKIE_NAME" >> .env.production
+            - printf "SESSION_TTL_DAYS=%s\n" "$SESSION_TTL_DAYS" >> .env.production
+            - printf "ADMIN_KEY=%s\n" "$ADMIN_KEY" >> .env.production
+
+            # --- Cloudflare Turnstile (needed at runtime for API routes) ---
+            - printf "NEXT_PUBLIC_TURNSTILE_SITE_KEY=%s\n" "$NEXT_PUBLIC_TURNSTILE_SITE_KEY" >> .env.production
+            - printf "TURNSTILE_SECRET_KEY=%s\n" "$TURNSTILE_SECRET_KEY" >> .env.production
+
+            # --- S3 uploads (runtime required for applications/scholarships uploads) ---
+            - printf "S3_BUCKET_NAME=%s\n" "$S3_BUCKET_NAME" >> .env.production
+            - printf "S3_UPLOAD_PREFIX=%s\n" "$S3_UPLOAD_PREFIX" >> .env.production
+            - printf "S3_PUBLIC_BASE_URL=%s\n" "$S3_PUBLIC_BASE_URL" >> .env.production
+
+            # --- Upload limits (if your API validates these) ---
+            - printf "APP_MAX_FILES=%s\n" "$APP_MAX_FILES" >> .env.production
+            - printf "APP_MAX_PER_FILE_MB=%s\n" "$APP_MAX_PER_FILE_MB" >> .env.production
+            - printf "APP_MAX_TOTAL_MB=%s\n" "$APP_MAX_TOTAL_MB" >> .env.production
+
+            # --- AWS region + credentials (ONLY if you are not using an IAM role) ---
+            - printf "AWS_REGION=%s\n" "$AWS_REGION" >> .env.production
+            - printf "AWS_ACCESS_KEY_ID=%s\n" "$AWS_ACCESS_KEY_ID" >> .env.production
+            - printf "AWS_SECRET_ACCESS_KEY=%s\n" "$AWS_SECRET_ACCESS_KEY" >> .env.production
+
+            # --- Email / SMTP (HostGator) ---
             - printf "SMTP_HOST=%s\n" "$SMTP_HOST" >> .env.production
             - printf "SMTP_PORT=%s\n" "$SMTP_PORT" >> .env.production
             - printf "SMTP_USER=%s\n" "$SMTP_USER" >> .env.production
@@ -27,10 +55,9 @@ applications:
             - printf "SES_FROM_EMAIL=%s\n" "$SES_FROM_EMAIL" >> .env.production
             - printf "SES_ADMIN_EMAIL=%s\n" "$SES_ADMIN_EMAIL" >> .env.production
 
-            # --- Base URL (useful for verification links) ---
-            - printf "APP_BASE_URL=%s\n" "$APP_BASE_URL" >> .env.production
-
             - echo "✅ wrote .env.production" && wc -l .env.production
+            # (Optional) quick sanity check (won’t print values)
+            - node -e "require('dotenv').config({path:'.env.production'}); const need=['DATABASE_URL','S3_BUCKET_NAME','SMTP_HOST']; const miss=need.filter(k=>!process.env[k]); if(miss.length){console.error('Missing envs:',miss.join(',')); process.exit(1);} console.log('✅ env ok');"
 
             # 2) Prisma (uses build-time env vars OR .env.production)
             - npx prisma generate
