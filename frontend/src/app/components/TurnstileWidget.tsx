@@ -2,7 +2,7 @@
 "use client";
 
 import Script from "next/script";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 declare global {
   interface Window {
@@ -17,58 +17,103 @@ declare global {
 type Props = {
   onToken: (token: string) => void;
   theme?: "light" | "dark" | "auto";
-  // ✅ NEW: allow parent to force-reset the widget
+
+  /**
+   * When this number changes, the widget will reset.
+   * Useful after submit or when user edits fields.
+   */
   resetSignal?: number;
+
+  /**
+   * Turnstile behaviour:
+   * - "interaction-only" helps avoid showing success too early.
+   * - "always" always shows widget prompt.
+   */
+  appearance?: "always" | "interaction-only";
+
+  /**
+   * Optional: helps Turnstile score intent per form.
+   */
+  action?: string;
 };
 
 export default function TurnstileWidget({
   onToken,
   theme = "light",
-  resetSignal = 0,
+  resetSignal,
+  appearance = "interaction-only",
+  action,
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
 
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || "";
 
-  const tryRender = () => {
-    if (!window.turnstile || !ref.current || !siteKey) return;
-
-    // Prevent duplicate renders
-    if (widgetIdRef.current) return;
-
-    widgetIdRef.current = window.turnstile.render(ref.current, {
+  // stable options object (avoids re-render loops)
+  const opts = useMemo(
+    () => ({
       sitekey: siteKey,
       theme,
+      appearance,
+      action,
       callback: (token: string) => onToken(token),
       "expired-callback": () => onToken(""),
       "error-callback": () => onToken(""),
-    });
-  };
+    }),
+    [siteKey, theme, appearance, action, onToken]
+  );
 
   useEffect(() => {
-    tryRender();
+    if (!ref.current) return;
+    if (!siteKey) return;
+
+    const tryRender = () => {
+      if (!window.turnstile || !ref.current) return;
+
+      // remove any previous widget instance
+      if (widgetIdRef.current) {
+        try {
+          window.turnstile.remove(widgetIdRef.current);
+        } catch {}
+        widgetIdRef.current = null;
+      }
+
+      try {
+        widgetIdRef.current = window.turnstile.render(ref.current, opts);
+      } catch {
+        // ignore
+      }
+    };
+
+    // Render as soon as turnstile script is available
+    const t = setInterval(() => {
+      tryRender();
+      if (window.turnstile && widgetIdRef.current) clearInterval(t);
+    }, 150);
 
     return () => {
+      clearInterval(t);
       if (window.turnstile && widgetIdRef.current) {
         try {
           window.turnstile.remove(widgetIdRef.current);
         } catch {}
       }
-      widgetIdRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siteKey, theme]);
+  }, [siteKey, opts]);
 
-  // ✅ Reset when parent changes resetSignal
+  // Reset when resetSignal changes
   useEffect(() => {
-    if (!window.turnstile || !widgetIdRef.current) return;
+    if (!window.turnstile) return;
+    if (!widgetIdRef.current) return;
+    if (resetSignal == null) return;
+
     try {
       window.turnstile.reset(widgetIdRef.current);
-      onToken("");
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetSignal]);
+
+    // also clear token in parent
+    onToken("");
+  }, [resetSignal, onToken]);
 
   if (!siteKey) {
     return (
@@ -83,7 +128,6 @@ export default function TurnstileWidget({
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
-        onLoad={tryRender}
       />
       <div ref={ref} />
     </>

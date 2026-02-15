@@ -11,8 +11,9 @@ export default function LoginClient() {
   const params = useSearchParams();
 
   const next = useMemo(() => params.get("next") || "/apply", [params]);
+  const emailPrefill = useMemo(() => params.get("email") || "", [params]);
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(emailPrefill);
   const [password, setPassword] = useState("");
 
   const [captchaToken, setCaptchaToken] = useState("");
@@ -185,6 +186,18 @@ export default function LoginClient() {
                     placeholder="Your password"
                     autoComplete="current-password"
                   />
+                </div>
+
+                {/* ✅ Forgot password link */}
+                <div className="flex items-center justify-end">
+                  <Link
+                    href={`/forgot-password?email=${encodeURIComponent(
+                      email || emailPrefill
+                    )}&next=${encodeURIComponent(next)}`}
+                    className="text-sm font-semibold text-[color:var(--color-brand)] hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
                 </div>
 
                 <div className="pt-1">

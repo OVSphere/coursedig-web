@@ -45,6 +45,9 @@ model User {
   resendAttempts          EmailVerificationResendAttempt[]
   emailVerificationTokens EmailVerificationToken[]         @relation("UserEmailVerificationTokens")
   sessions                Session[]
+  
+  passwordResetTokens     PasswordResetToken[]
+  passwordResetAttempts   PasswordResetRequestAttempt[]
 }
 
 model EmailVerificationToken {
@@ -140,6 +143,34 @@ model Course {
 
   @@index([published])
   @@index([category])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  usedAt    DateTime?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([usedAt])
+}
+
+model PasswordResetRequestAttempt {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  userId    String?
+  email     String
+  ipAddress String?
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([userId, createdAt])
 }
 
 model CourseFee {

@@ -55,6 +55,9 @@ applications:
             - printf "SES_FROM_EMAIL=%s\n" "$SES_FROM_EMAIL" >> .env.production
             - printf "SES_ADMIN_EMAIL=%s\n" "$SES_ADMIN_EMAIL" >> .env.production
 
+            # --- Password reset ---
+            - printf "RESET_TOKEN_TTL_MINUTES=%s\n" "$RESET_TOKEN_TTL_MINUTES" >> .env.production
+
             - echo "✅ wrote .env.production" && wc -l .env.production
             # (Optional) quick sanity check (won’t print values)
             - node -e "require('dotenv').config({path:'.env.production'}); const need=['DATABASE_URL','S3_BUCKET_NAME','SMTP_HOST']; const miss=need.filter(k=>!process.env[k]); if(miss.length){console.error('Missing envs:',miss.join(',')); process.exit(1);} console.log('✅ env ok');"

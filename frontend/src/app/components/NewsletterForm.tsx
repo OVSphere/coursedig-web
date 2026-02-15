@@ -1,3 +1,4 @@
+// frontend/src/app/components/NewsletterForm.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -20,10 +21,11 @@ export default function NewsletterForm() {
 
   const captchaRequired = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
-  // ✅ Clear old messages when user edits the email
+  // ✅ Clear messages when user edits email.
+  // ✅ If captcha is required, also reset token + widget (prevents stale “Success!”)
   useEffect(() => {
     setMsg(null);
-    // If they change the email, reset captcha to avoid stale state
+
     if (captchaRequired) {
       setCaptchaToken("");
       setCaptchaKey((k) => k + 1);
@@ -121,24 +123,25 @@ export default function NewsletterForm() {
         <p className="text-xs text-red-600">Please enter a valid email address.</p>
       )}
 
-      {/* ✅ Show helper ONLY when captcha is required and not completed */}
-      {captchaRequired && !captchaToken && (
+      {/* ✅ Helper message only after email is valid (and captcha is required + not completed) */}
+      {captchaRequired && emailValid && !captchaToken && (
         <p className="text-xs text-gray-600">
           Please complete the security check to subscribe.
         </p>
       )}
 
-      {/* Cloudflare Turnstile */}
-      {captchaRequired && (
+      {/* ✅ Turnstile ONLY appears after email becomes valid */}
+      {captchaRequired && emailValid && (
         <div className="pt-2">
           <TurnstileWidget
             key={captchaKey}
             onToken={(t) => {
               setCaptchaToken(t || "");
-              // clear any "complete captcha" error once token arrives
               if (t) setMsg(null);
             }}
             theme="light"
+            appearance="interaction-only"
+            action="newsletter_subscribe"
           />
         </div>
       )}
