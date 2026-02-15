@@ -1,4 +1,4 @@
-// frontend/src/app/components/TurnstileWidget.tsx
+//frontend/src/app/components/TurnstileWidget.tsx
 "use client";
 
 import Script from "next/script";
@@ -17,73 +17,58 @@ declare global {
 type Props = {
   onToken: (token: string) => void;
   theme?: "light" | "dark" | "auto";
+  // ✅ NEW: allow parent to force-reset the widget
+  resetSignal?: number;
 };
 
-export default function TurnstileWidget({ onToken, theme = "light" }: Props) {
+export default function TurnstileWidget({
+  onToken,
+  theme = "light",
+  resetSignal = 0,
+}: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
 
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
+  const tryRender = () => {
+    if (!window.turnstile || !ref.current || !siteKey) return;
+
+    // Prevent duplicate renders
+    if (widgetIdRef.current) return;
+
+    widgetIdRef.current = window.turnstile.render(ref.current, {
+      sitekey: siteKey,
+      theme,
+      callback: (token: string) => onToken(token),
+      "expired-callback": () => onToken(""),
+      "error-callback": () => onToken(""),
+    });
+  };
+
   useEffect(() => {
-    if (!ref.current || !siteKey) return;
-
-    let cancelled = false;
-    let attempts = 0;
-
-    const renderOnce = () => {
-      if (cancelled) return;
-      if (!window.turnstile || !ref.current) return false;
-
-      // If already rendered, do nothing (prevents re-render loops / vibration)
-      if (widgetIdRef.current) return true;
-
-      try {
-        widgetIdRef.current = window.turnstile.render(ref.current, {
-          sitekey: siteKey,
-          theme,
-
-          // ✅ Force user interaction (stops “auto success” feel on mobile)
-          appearance: "interaction-only",
-
-          // ✅ Don't auto-execute repeatedly
-          execution: "render",
-
-          callback: (token: string) => onToken(token),
-          "expired-callback": () => onToken(""),
-          "error-callback": () => onToken(""),
-        });
-
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
-    // Try immediately
-    if (renderOnce()) return;
-
-    // Then retry a few times until the script is ready
-    const t = setInterval(() => {
-      attempts += 1;
-      const ok = renderOnce();
-      if (ok || attempts >= 50) {
-        clearInterval(t);
-      }
-    }, 100);
+    tryRender();
 
     return () => {
-      cancelled = true;
-      clearInterval(t);
-
       if (window.turnstile && widgetIdRef.current) {
         try {
           window.turnstile.remove(widgetIdRef.current);
         } catch {}
-        widgetIdRef.current = null;
       }
+      widgetIdRef.current = null;
     };
-  }, [onToken, theme, siteKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteKey, theme]);
+
+  // ✅ Reset when parent changes resetSignal
+  useEffect(() => {
+    if (!window.turnstile || !widgetIdRef.current) return;
+    try {
+      window.turnstile.reset(widgetIdRef.current);
+      onToken("");
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
   if (!siteKey) {
     return (
@@ -98,6 +83,7 @@ export default function TurnstileWidget({ onToken, theme = "light" }: Props) {
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
+        onLoad={tryRender}
       />
       <div ref={ref} />
     </>
