@@ -1,7 +1,10 @@
 // frontend/src/app/page.tsx
 import Link from "next/link";
+import Image from "next/image";
 import NewsletterForm from "./components/NewsletterForm";
 import PopularCourses from "./components/PopularCourses";
+import TrustLogosStrip from "./components/TrustLogosStrip";
+import StudentSuccessStories from "./components/StudentSuccessStories";
 import { getPrismaServer } from "@/lib/prisma-server";
 
 function formatMoneyGBP(amountPence: number | null | undefined) {
@@ -62,11 +65,33 @@ export default async function Home() {
       imageAlt: c.imageAlt || c.title,
     }));
   } catch (err: any) {
-    // ✅ Do NOT crash the homepage if DB/Prisma fails in production
     console.error("[HOME] Failed to load popular courses:", err?.message || err);
     coursesError = "Popular courses are temporarily unavailable. Please refresh shortly.";
     popularCards = [];
   }
+
+  const features = [
+    {
+      title: "Flexible learning",
+      description: "Choose a pathway that fits your schedule.",
+      image: "/icons/flexible-learning.jpg",
+    },
+    {
+      title: "Real support",
+      description: "Guidance from enrolment through completion.",
+      image: "/icons/real-support.jpg",
+    },
+    {
+      title: "Clear outcomes",
+      description: "Skills employers and universities recognise.",
+      image: "/icons/clear-outcomes.jpg",
+    },
+    {
+      title: "Fast enquiries",
+      description: "Quick response from admissions.",
+      image: "/icons/fast-enquiries.jpg",
+    },
+  ] as const;
 
   return (
     <div className="bg-white">
@@ -80,12 +105,12 @@ export default async function Home() {
               </div>
 
               <h1 className="text-4xl font-bold tracking-tight text-gray-900 md:text-5xl">
-                Learn skills that move your career forward.
+                Practical courses that lead to real progression.
               </h1>
 
               <p className="mt-4 max-w-xl text-lg leading-8 text-gray-700">
-                CourseDig offers practical training and support for learners progressing into work or university,
-                from IT and analytics to health and social care.
+                Learn with structured support, clear outcomes, and pathways into work or UK university top-up routes —
+                across computing, business, health and social care, and more.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -100,7 +125,7 @@ export default async function Home() {
                   href="/enquiry"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-6 py-3 text-sm font-semibold text-gray-900 hover:border-transparent hover:bg-gray-50"
                 >
-                  Make an Enquiry
+                  Get free guidance
                 </Link>
               </div>
 
@@ -111,6 +136,11 @@ export default async function Home() {
                 </Link>
                 .
               </p>
+
+              {/* ✅ Red + bold (as requested) */}
+              <p className="mt-4 text-sm font-bold text-[color:var(--color-brand)]">
+                Many learners progress to UK top-up degrees and achieve strong classifications.
+              </p>
             </div>
 
             {/* RIGHT CARD */}
@@ -120,23 +150,28 @@ export default async function Home() {
                 <p className="mt-1 text-sm text-gray-600">Clear pathways, real support, and outcomes you can use.</p>
               </div>
 
+              {/* Feature tiles with images + overlay */}
               <div className="mt-8 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <p className="text-sm font-semibold text-gray-900">Flexible learning</p>
-                  <p className="mt-1 text-sm text-gray-600">Choose a pathway that fits your schedule.</p>
-                </div>
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <p className="text-sm font-semibold text-gray-900">Real support</p>
-                  <p className="mt-1 text-sm text-gray-600">Guidance from enrolment through completion.</p>
-                </div>
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <p className="text-sm font-semibold text-gray-900">Clear outcomes</p>
-                  <p className="mt-1 text-sm text-gray-600">Skills employers and universities recognise.</p>
-                </div>
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <p className="text-sm font-semibold text-gray-900">Fast enquiries</p>
-                  <p className="mt-1 text-sm text-gray-600">Quick response from admissions.</p>
-                </div>
+                {features.map((f) => (
+                  <div
+                    key={f.title}
+                    className="group relative h-32 overflow-hidden rounded-xl border border-gray-200 bg-gray-100 shadow-sm"
+                  >
+                    <Image
+                      src={f.image}
+                      alt={f.title}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-white/95 via-white/70 to-white/35" />
+                    <div className="absolute inset-0 flex flex-col justify-end p-4">
+                      <p className="text-sm font-semibold text-gray-900">{f.title}</p>
+                      <p className="mt-1 text-sm text-gray-700">{f.description}</p>
+                    </div>
+                    <div className="pointer-events-none absolute inset-0 ring-1 ring-transparent transition group-hover:ring-gray-300" />
+                  </div>
+                ))}
               </div>
 
               <div className="mt-8">
@@ -151,6 +186,12 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      {/* Trust strip */}
+      <TrustLogosStrip variant="soft" />
+
+      {/* Success stories */}
+      <StudentSuccessStories variant="white" />
 
       {/* POPULAR COURSES */}
       {coursesError ? (

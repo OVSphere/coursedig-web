@@ -25,29 +25,31 @@ model EnquiryCounter {
 }
 
 model User {
-  id                      String                           @id @default(cuid())
-  email                   String                           @unique
-  fullName                String?
-  passwordHash            String
-  createdAt               DateTime                         @default(now())
-  emailVerifiedAt         DateTime?
-  isAdmin                 Boolean                          @default(false)
-  adminSecondFactorHash   String?
-  isSuperAdmin            Boolean                          @default(false)
-  updatedAt               DateTime                         @default(now()) @updatedAt
-  dateOfBirth             DateTime?
-  firstName               String?
-  lastName                String?
-  phoneNumber             String?
-  profileLockedAt         DateTime?
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  fullName              String?
+  passwordHash          String
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now()) @updatedAt
+  emailVerifiedAt       DateTime?
+  isAdmin               Boolean   @default(false)
+  adminSecondFactorHash String?
+  isSuperAdmin          Boolean   @default(false)
+
+  dateOfBirth     DateTime?
+  firstName       String?
+  lastName        String?
+  phoneNumber     String?
+  profileLockedAt DateTime?
+
   applications            Application[]
   auditEvents             AuthzAuditEvent[]                @relation("AuditActor")
   resendAttempts          EmailVerificationResendAttempt[]
   emailVerificationTokens EmailVerificationToken[]         @relation("UserEmailVerificationTokens")
   sessions                Session[]
-  
-  passwordResetTokens     PasswordResetToken[]
-  passwordResetAttempts   PasswordResetRequestAttempt[]
+
+  passwordResetTokens   PasswordResetToken[]
+  passwordResetAttempts PasswordResetRequestAttempt[]
 }
 
 model EmailVerificationToken {
@@ -74,8 +76,8 @@ model Session {
 }
 
 model Application {
-  id                 String                  @id @default(cuid())
-  appRef             String                  @unique
+  id                 String          @id @default(cuid())
+  appRef             String          @unique
   userId             String
   courseName         String
   otherCourseName    String?
@@ -87,11 +89,12 @@ model Application {
   countryOfResidence String
   personalStatement  String
   courseId           String?
-  status             String                  @default("SUBMITTED")
-  createdAt          DateTime                @default(now())
-  applicationType    ApplicationType         @default(COURSE)
-  user               User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  attachments        ApplicationAttachment[]
+  status             String          @default("SUBMITTED")
+  createdAt          DateTime        @default(now())
+  applicationType    ApplicationType @default(COURSE)
+
+  user        User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments ApplicationAttachment[]
 }
 
 model ApplicationAttachment {
@@ -114,8 +117,8 @@ model ApplicationCounter {
 }
 
 model Course {
-  id                String     @id @default(cuid())
-  slug              String     @unique
+  id                String  @id @default(cuid())
+  slug              String  @unique
   title             String
   category          String?
   shortDescription  String?
@@ -127,32 +130,36 @@ model Course {
   delivery          String?
   startDatesNote    String?
   priceNote         String?
-  published         Boolean    @default(false)
-  sortOrder         Int        @default(0)
+  published         Boolean @default(false)
+  sortOrder         Int     @default(0)
 
-  // ✅ add these back (used by homepage/admin ranking)
-  homePopularRank   Int?
-  homeLevel45Rank   Int?
-  homeLevel7Rank    Int?
+  homePopularRank Int?
+  homeLevel45Rank Int?
+  homeLevel7Rank  Int?
 
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-  heroImage         String?
-  imageAlt          String?
-  fee               CourseFee?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  heroImage String?
+  imageAlt  String?
+
+  fee CourseFee?
 
   @@index([published])
   @@index([category])
+  @@index([homePopularRank])
+  @@index([homeLevel45Rank])
+  @@index([homeLevel7Rank])
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   usedAt    DateTime?
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
@@ -165,7 +172,7 @@ model PasswordResetRequestAttempt {
   userId    String?
   email     String
   ipAddress String?
-  user      User?    @relation(fields: [userId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([email, createdAt])
@@ -184,7 +191,7 @@ model CourseFee {
   note                     String?
   isActive                 Boolean     @default(true)
   createdAt                DateTime    @default(now())
-  updatedAt                DateTime    @updatedAt
+  updatedAt                DateTime    @default(now()) @updatedAt
   course                   Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@index([level])
@@ -198,7 +205,7 @@ model NewsletterSubscriber {
   source    String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([isActive])
   @@index([createdAt])
@@ -231,7 +238,7 @@ model EmailVerificationResendAttempt {
   userId    String?
   email     String
   ipAddress String?
-  user      User?    @relation(fields: [userId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([email, createdAt])

@@ -2,7 +2,7 @@
 "use client";
 
 import Script from "next/script";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 declare global {
   interface Window {
@@ -47,9 +47,12 @@ export default function TurnstileWidget({
   const ref = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
 
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || "";
+  // Track whether the Turnstile script has loaded
+  const [scriptReady, setScriptReady] = useState(false);
 
-  // stable options object (avoids re-render loops)
+  const siteKey = (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "").trim();
+
+  // Stable options object
   const opts = useMemo(
     () => ({
       sitekey: siteKey,
@@ -63,57 +66,59 @@ export default function TurnstileWidget({
     [siteKey, theme, appearance, action, onToken]
   );
 
-  useEffect(() => {
+  const removeWidget = useCallback(() => {
+    if (!window.turnstile) return;
+    if (!widgetIdRef.current) return;
+
+    try {
+      window.turnstile.remove(widgetIdRef.current);
+    } catch {
+      // ignore
+    } finally {
+      widgetIdRef.current = null;
+    }
+  }, []);
+
+  const renderWidget = useCallback(() => {
     if (!ref.current) return;
     if (!siteKey) return;
+    if (!window.turnstile) return;
 
-    const tryRender = () => {
-      if (!window.turnstile || !ref.current) return;
+    // If a widget exists, remove first (prevents duplicates)
+    if (widgetIdRef.current) {
+      removeWidget();
+    }
 
-      // remove any previous widget instance
-      if (widgetIdRef.current) {
-        try {
-          window.turnstile.remove(widgetIdRef.current);
-        } catch {}
-        widgetIdRef.current = null;
-      }
+    try {
+      widgetIdRef.current = window.turnstile.render(ref.current, opts);
+    } catch {
+      // ignore
+    }
+  }, [opts, removeWidget, siteKey]);
 
-      try {
-        widgetIdRef.current = window.turnstile.render(ref.current, opts);
-      } catch {
-        // ignore
-      }
-    };
-
-    // Render as soon as turnstile script is available
-    const t = setInterval(() => {
-      tryRender();
-      if (window.turnstile && widgetIdRef.current) clearInterval(t);
-    }, 150);
+  // Render when script is ready
+  useEffect(() => {
+    if (!scriptReady) return;
+    renderWidget();
 
     return () => {
-      clearInterval(t);
-      if (window.turnstile && widgetIdRef.current) {
-        try {
-          window.turnstile.remove(widgetIdRef.current);
-        } catch {}
-      }
+      removeWidget();
     };
-  }, [siteKey, opts]);
+  }, [scriptReady, renderWidget, removeWidget]);
 
   // Reset when resetSignal changes
   useEffect(() => {
-    if (!window.turnstile) return;
-    if (!widgetIdRef.current) return;
     if (resetSignal == null) return;
 
-    try {
-      window.turnstile.reset(widgetIdRef.current);
-    } catch {}
-
-    // also clear token in parent
+    // Always clear token in parent
     onToken("");
-  }, [resetSignal, onToken]);
+
+    // If script not ready yet, do nothing (it will render when ready)
+    if (!scriptReady) return;
+
+    // Hard reset (remove + render) is more reliable than reset()
+    renderWidget();
+  }, [resetSignal, onToken, scriptReady, renderWidget]);
 
   if (!siteKey) {
     return (
@@ -128,8 +133,13 @@ export default function TurnstileWidget({
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
+        onLoad={() => setScriptReady(true)}
       />
-      <div ref={ref} />
+      <div
+        ref={ref}
+        // helps avoid “invisible” widget area on some layouts
+        style={{ minHeight: 72 }}
+      />
     </>
   );
 }

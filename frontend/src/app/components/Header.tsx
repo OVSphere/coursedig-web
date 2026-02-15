@@ -1,4 +1,3 @@
-// frontend/src/app/components/Header.tsx
 "use client";
 
 import Link from "next/link";
@@ -54,6 +53,22 @@ function IconX(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+function IconWhatsApp(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+      <path d="M20.5 3.5A11 11 0 0 0 3.7 17.7L2 22l4.5-1.6A11 11 0 0 0 20.5 3.5zm-8.6 18a9 9 0 0 1-4.6-1.3l-.3-.2-2.6.9.9-2.5-.2-.3A9 9 0 1 1 11.9 21.5zm5.2-6.7c-.3-.2-1.7-.8-2-1s-.5-.2-.7.2-.8 1-.9 1.2-.3.2-.6.1a7.3 7.3 0 0 1-2.1-1.3 7.9 7.9 0 0 1-1.5-1.9c-.2-.3 0-.5.1-.6l.4-.5c.1-.2.2-.3.3-.5s0-.3 0-.5-.7-1.7-.9-2.3c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.7.3-.2.2-1 1-1 2.5s1 2.9 1.2 3.1c.1.2 2 3.1 4.8 4.3.7.3 1.2.5 1.7.6.7.2 1.3.2 1.8.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.1-1.4-.1-.2-.3-.2-.6-.4z" />
+    </svg>
+  );
+}
+
+function IconPhone(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+      <path d="M6.6 10.8c1.5 3 3.6 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.3 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.3 21 3 13.7 3 4c0-.6.4-1 1-1h3.3c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.3 1.1L6.6 10.8z" />
+    </svg>
+  );
+}
+
 function IconMenu(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
@@ -93,7 +108,6 @@ export default function Header() {
     }
   }
 
-  // Load on mount
   useEffect(() => {
     let cancelled = false;
 
@@ -108,7 +122,6 @@ export default function Header() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Refetch on route change (so UI updates after login/logout)
   useEffect(() => {
     loadMe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,60 +149,76 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b bg-white">
       {/* Top bar */}
       <div className="border-b border-red-700/30 bg-[color:var(--color-brand)] text-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-2">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-            <a
-              href={telHref}
-              className="hover:underline decoration-white/70 underline-offset-2"
-            >
-              <span className="font-semibold text-white">Tel:</span> 0161 388 2338
-            </a>
-
-            <span className="hidden text-white/70 md:inline">•</span>
-
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-2">
+          {/* Left: CTAs */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {/* WhatsApp (green branded) */}
             <a
               href={whatsappHref}
               target="_blank"
               rel="noreferrer"
-              className="font-semibold text-white hover:underline decoration-white/70 underline-offset-2"
-              title="WhatsApp"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 font-semibold text-[#25D366] shadow-sm hover:bg-white/95"
+              title="Chat on WhatsApp"
+              aria-label="Chat on WhatsApp"
             >
-              WhatsApp
+              <IconWhatsApp className="h-4 w-4" />
+              <span>Chat on WhatsApp</span>
+            </a>
+
+            <span className="hidden text-white/70 md:inline">•</span>
+
+            <span className="hidden text-white/90 md:inline">
+              Quick guidance · fast replies
+            </span>
+
+            <span className="hidden text-white/70 md:inline">•</span>
+
+            {/* Call CTA (tel link) */}
+            <a
+              href={telHref}
+              className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 font-semibold text-[color:var(--color-brand)] shadow-sm hover:bg-white/95"
+              title="Call now"
+              aria-label="Call now"
+            >
+              <IconPhone className="h-4 w-4" />
+              <span className="hidden sm:inline">Call now</span>
+              <span className="sm:hidden">Call</span>
             </a>
           </div>
 
-          <div className="flex items-center gap-2 text-white">
+          {/* Right: Social icons (brand colours) */}
+          <div className="flex items-center gap-2">
             <a
               href="https://www.facebook.com/yourcoursedig/"
               target="_blank"
               rel="noreferrer"
-              className="rounded p-1 hover:bg-white/15"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm hover:bg-white/95"
               aria-label="CourseDig on Facebook"
               title="Facebook"
             >
-              <IconFacebook className="h-4 w-4" />
+              <IconFacebook className="h-4 w-4 text-[#1877F2]" />
             </a>
 
             <a
               href="https://www.instagram.com/coursedig/"
               target="_blank"
               rel="noreferrer"
-              className="rounded p-1 hover:bg-white/15"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm hover:bg-white/95"
               aria-label="CourseDig on Instagram"
               title="Instagram"
             >
-              <IconInstagram className="h-4 w-4" />
+              <IconInstagram className="h-4 w-4 text-[#E4405F]" />
             </a>
 
             <a
               href="https://x.com/coursedig"
               target="_blank"
               rel="noreferrer"
-              className="rounded p-1 hover:bg-white/15"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm hover:bg-white/95"
               aria-label="CourseDig on X"
               title="X"
             >
-              <IconX className="h-4 w-4" />
+              <IconX className="h-4 w-4 text-[#111827]" />
             </a>
           </div>
         </div>
@@ -243,10 +272,8 @@ export default function Header() {
               );
             })}
 
-            {/* ✅ Only render these links once /me has loaded (prevents flicker) */}
             {!meLoaded ? null : (
               <>
-                {/* ✅ Profile (only when logged in) */}
                 {isAuthed && (
                   <Link
                     href="/profile"
@@ -262,7 +289,6 @@ export default function Header() {
                   </Link>
                 )}
 
-                {/* ✅ Admin link */}
                 {isAdmin && (
                   <Link
                     href="/admin"
@@ -272,7 +298,6 @@ export default function Header() {
                   </Link>
                 )}
 
-                {/* Auth links */}
                 {!isAuthed ? (
                   <Link
                     href="/login"
@@ -379,6 +404,22 @@ export default function Header() {
               >
                 Apply Now
               </Link>
+
+              {/* Mobile quick contact shortcuts */}
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-center text-sm font-semibold text-[#25D366] hover:bg-gray-50"
+              >
+                Chat on WhatsApp
+              </a>
+              <a
+                href={telHref}
+                className="rounded-md border border-gray-200 bg-white px-3 py-2 text-center text-sm font-semibold text-[color:var(--color-brand)] hover:bg-gray-50"
+              >
+                Call now
+              </a>
             </div>
           </div>
         )}

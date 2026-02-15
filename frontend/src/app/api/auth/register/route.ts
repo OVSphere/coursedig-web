@@ -1,10 +1,4 @@
-// src/app/api/auth/register/route.ts
-// NOTE (CourseDig update - Identity fields + profile lock):
-// 2026-02-07
-// ✅ Added mandatory identity fields (firstName/lastName/phoneNumber/dateOfBirth)
-// ✅ Persist identity fields on User + set profileLockedAt by default
-// ✅ Added devVerifyUrl for UI compatibility (without breaking existing devVerifyLink)
-
+//frontend/src/app/api/auth/register/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
@@ -12,12 +6,10 @@ import crypto from "crypto";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { emailConfigured, sendEmail } from "@/lib/mailer";
 
-// ✅ CHANGE (CourseDig): helpers for new mandatory identity fields
 function normaliseSpaces(v: string) {
   return (v || "").replace(/\s+/g, " ").trim();
 }
 
-// ✅ CHANGE (CourseDig): basic phone validation (len + allowed chars)
 function isPhoneLike(v: string) {
   const s = normaliseSpaces(v);
   const digits = s.replace(/\D/g, "");
@@ -25,7 +17,6 @@ function isPhoneLike(v: string) {
   return allowed && digits.length >= 10 && digits.length <= 15;
 }
 
-// ✅ CHANGE (CourseDig): parse DOB from YYYY-MM-DD (from <input type="date" />)
 function parseDob(dateStr: string): Date | null {
   const v = (dateStr || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
@@ -33,7 +24,6 @@ function parseDob(dateStr: string): Date | null {
   const d = new Date(`${v}T00:00:00.000Z`);
   if (Number.isNaN(d.getTime())) return null;
 
-  // must be in the past (not today / future)
   const today = new Date();
   const todayUTC = new Date(
     Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
@@ -48,8 +38,6 @@ function isEmailLike(email: string) {
 }
 
 const MIN_PASSWORD_LEN = 8;
-
-// 24 hours default (you can change)
 const VERIFY_TOKEN_TTL_HOURS = Number(process.env.VERIFY_TOKEN_TTL_HOURS ?? 24);
 
 function sha256Hex(input: string) {
@@ -57,7 +45,6 @@ function sha256Hex(input: string) {
 }
 
 function getBaseUrl(req: Request) {
-  // Prefer explicit envs (best for production)
   const envUrl =
     process.env.APP_BASE_URL ||
     process.env.APP_URL ||
@@ -66,7 +53,6 @@ function getBaseUrl(req: Request) {
 
   if (envUrl) return envUrl.replace(/\/+$/, "");
 
-  // Fallback: derive from request headers (works locally)
   const proto = req.headers.get("x-forwarded-proto") || "http";
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
   return `${proto}://${host}`.replace(/\/+$/, "");
@@ -113,28 +99,30 @@ export async function POST(req: Request) {
     const password = String(body.password ?? "");
     const fullName = String(body.fullName ?? "").trim();
 
-    // ✅ CHANGE (CourseDig): NEW mandatory identity fields from registration
     const firstName = normaliseSpaces(String(body.firstName ?? ""));
     const lastName = normaliseSpaces(String(body.lastName ?? ""));
     const phoneNumber = normaliseSpaces(String(body.phoneNumber ?? ""));
     const dob = parseDob(String(body.dateOfBirth ?? ""));
 
-    // CAPTCHA
     const captchaToken = String(body.captchaToken ?? "");
-    const ip =
+
+    // ✅ FIX: use first IP only (x-forwarded-for often contains a list)
+    const ipRaw =
       req.headers.get("cf-connecting-ip") ||
       req.headers.get("x-forwarded-for") ||
       null;
 
+    const ip =
+      typeof ipRaw === "string" ? ipRaw.split(",")[0].trim() : (ipRaw as any);
+
     const captcha = await verifyTurnstile(captchaToken, ip);
     if (!captcha.ok) {
       return NextResponse.json(
-        { message: captcha.message || "Captcha verification failed." },
+        { message: captcha.message || "Captcha verification failed. Please try again." },
         { status: 400 }
       );
     }
 
-    // ✅ CHANGE (CourseDig): server-side enforcement of mandatory identity fields
     if (firstName.length < 2) {
       return NextResponse.json({ message: "Please enter your first name." }, { status: 400 });
     }
@@ -161,7 +149,7 @@ export async function POST(req: Request) {
 
     const exists = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, emailVerifiedAt: true },
+      select: { id: true },
     });
 
     if (exists) {
@@ -172,11 +160,8 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-
-    // ✅ CHANGE (CourseDig): derive fullName from first/last if not provided
     const derivedFullName = fullName || normaliseSpaces(`${firstName} ${lastName}`);
 
-    // Create user
     const user = await prisma.user.create({
       data: {
         email,
@@ -184,19 +169,16 @@ export async function POST(req: Request) {
         passwordHash,
         emailVerifiedAt: null,
 
-        // ✅ CHANGE (CourseDig): persist identity fields on User for auto-fill
         firstName,
         lastName,
         phoneNumber,
         dateOfBirth: dob,
 
-        // ✅ CHANGE (CourseDig): lock profile identity fields by default (admin-only edits)
         profileLockedAt: new Date(),
       },
       select: { id: true, email: true },
     });
 
-    // Create verification token record
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = sha256Hex(rawToken);
 
@@ -216,19 +198,12 @@ export async function POST(req: Request) {
     const baseUrl = getBaseUrl(req);
     const verifyLink = `${baseUrl}/verify-email?token=${encodeURIComponent(rawToken)}`;
 
-    /**
-     * EMAIL SENDING
-     * - DEV: log the verification link + return devVerifyLink/devVerifyUrl
-     * - PROD: send SMTP email (HostGator)
-     */
     const isProd = process.env.NODE_ENV === "production";
 
     if (!isProd) {
       console.log("DEV EMAIL (verification link):", verifyLink);
     } else {
-      // ✅ SMTP must be configured in runtime (.env.production copied into compute)
       if (!emailConfigured()) {
-        // rollback so users don’t get stuck
         await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } }).catch(() => {});
         await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
         return NextResponse.json(
@@ -254,7 +229,6 @@ export async function POST(req: Request) {
       } catch (sendErr) {
         console.error("REGISTER_EMAIL_SEND_ERROR:", sendErr);
 
-        // rollback so users don’t get stuck
         await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } }).catch(() => {});
         await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
 

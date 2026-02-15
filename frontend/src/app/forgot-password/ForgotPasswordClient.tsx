@@ -6,6 +6,10 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import TurnstileWidget from "@/app/components/TurnstileWidget";
 
+function isEmailLike(v: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((v || "").trim());
+}
+
 export default function ForgotPasswordClient() {
   const sp = useSearchParams();
   const next = useMemo(() => sp.get("next") || "/apply", [sp]);
@@ -13,31 +17,63 @@ export default function ForgotPasswordClient() {
 
   const [email, setEmail] = useState(emailPrefill);
   const [captchaToken, setCaptchaToken] = useState("");
+  const [resetSignal, setResetSignal] = useState(0);
+
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [touched, setTouched] = useState(false);
+
+  const emailTrimmed = (email || "").trim();
+  const emailValid = isEmailLike(emailTrimmed);
+  const emailInvalid = touched && emailTrimmed.length > 0 && !emailValid;
+
+  const canSubmit = !busy && emailValid && !!captchaToken;
 
   const inputClass =
     "mt-2 w-full rounded-md border border-gray-300 bg-white text-gray-900 " +
     "placeholder-gray-400 px-4 py-3 text-sm outline-none " +
     "focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]";
 
+  const inputInvalidClass =
+    "mt-2 w-full rounded-md border border-red-300 bg-red-50 text-gray-900 " +
+    "placeholder-gray-400 px-4 py-3 text-sm outline-none " +
+    "focus:border-red-400 focus:ring-2 focus:ring-red-100";
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setMessage(null);
+    setTouched(true);
+
+    if (!emailValid) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    if (!captchaToken) {
+      setError("Please complete the captcha to continue.");
+      return;
+    }
+
     setBusy(true);
 
     try {
       const res = await fetch("/api/auth/request-password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, captchaToken }),
+        body: JSON.stringify({ email: emailTrimmed, captchaToken }),
       });
 
       const json = await res.json().catch(() => ({}));
+
       if (!res.ok) {
         setError(json.message || "Request failed.");
+
+        // Prevent stale/expired token loops
+        setCaptchaToken("");
+        setResetSignal((n) => n + 1);
         return;
       }
 
@@ -45,8 +81,14 @@ export default function ForgotPasswordClient() {
         json.message ||
           "If an account exists for this email, a password reset link has been sent."
       );
+
+      // Clear + reset captcha after success too (one-time token)
+      setCaptchaToken("");
+      setResetSignal((n) => n + 1);
     } catch (e: any) {
       setError(e?.message || "Request failed.");
+      setCaptchaToken("");
+      setResetSignal((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -77,17 +119,37 @@ export default function ForgotPasswordClient() {
             <div>
               <label className="text-sm font-semibold text-gray-900">Email</label>
               <input
-                className={inputClass}
+                className={emailInvalid ? inputInvalidClass : inputClass}
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError(null);
+                  setMessage(null);
+                }}
+                onBlur={() => setTouched(true)}
                 placeholder="you@example.com"
                 inputMode="email"
                 autoComplete="email"
+                disabled={busy}
+                required
               />
+              {emailInvalid ? (
+                <p className="mt-2 text-xs text-red-700">Please enter a valid email address.</p>
+              ) : (
+                <p className="mt-2 text-xs text-gray-500">
+                  Use the email address you registered with.
+                </p>
+              )}
             </div>
 
             <div className="pt-1">
-              <TurnstileWidget onToken={setCaptchaToken} theme="light" />
+              <TurnstileWidget
+                onToken={setCaptchaToken}
+                theme="light"
+                resetSignal={resetSignal}
+                appearance="always"
+                action="forgot_password"
+              />
               <p className="mt-2 text-xs text-gray-500">
                 Please complete the captcha to continue.
               </p>
@@ -95,9 +157,9 @@ export default function ForgotPasswordClient() {
 
             <button
               type="submit"
-              disabled={busy || !captchaToken}
+              disabled={!canSubmit}
               className={`w-full rounded-md px-6 py-3 text-sm font-semibold text-white ${
-                busy || !captchaToken
+                !canSubmit
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-[color:var(--color-brand)] hover:bg-[color:var(--color-brand-dark)]"
               }`}
@@ -105,10 +167,16 @@ export default function ForgotPasswordClient() {
               {busy ? "Sending…" : "Send reset link"}
             </button>
 
+            {!canSubmit ? (
+              <p className="text-xs text-gray-500">
+                Enter a valid email address and complete the captcha to enable submission.
+              </p>
+            ) : null}
+
             <div className="flex items-center justify-between text-sm">
               <Link
                 className="font-semibold text-[color:var(--color-brand)] hover:underline"
-                href={`/login?next=${encodeURIComponent(next)}&email=${encodeURIComponent(email)}`}
+                href={`/login?next=${encodeURIComponent(next)}&email=${encodeURIComponent(emailTrimmed)}`}
               >
                 Back to login
               </Link>

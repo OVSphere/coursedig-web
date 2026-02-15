@@ -15,6 +15,19 @@ function sha256Hex(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex");
 }
 
+function getClientIp(req: Request): string | null {
+  const cf = req.headers.get("cf-connecting-ip");
+  if (cf && cf.trim()) return cf.trim();
+
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff && xff.trim()) return xff.split(",")[0].trim();
+
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp && realIp.trim()) return realIp.trim();
+
+  return null;
+}
+
 function getBaseUrl(req: Request) {
   const envUrl =
     process.env.APP_BASE_URL ||
@@ -25,7 +38,8 @@ function getBaseUrl(req: Request) {
   if (envUrl) return envUrl.replace(/\/+$/, "");
 
   const proto = req.headers.get("x-forwarded-proto") || "http";
-  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
+  const host =
+    req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
   return `${proto}://${host}`.replace(/\/+$/, "");
 }
 
@@ -61,19 +75,20 @@ function buildResetHtml(params: { resetLink: string; firstName?: string }) {
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const neutralOk = "If an account exists for this email, a password reset link has been sent.";
+  const neutralOk =
+    "If an account exists for this email, a password reset link has been sent.";
 
   try {
     const body = await req.json().catch(() => ({}));
     const email = String(body.email ?? "").trim().toLowerCase();
-
     const captchaToken = String(body.captchaToken ?? "");
-    const ipRaw =
-      req.headers.get("cf-connecting-ip") ||
-      req.headers.get("x-forwarded-for") ||
-      null;
 
-    const ip = typeof ipRaw === "string" ? ipRaw.split(",")[0].trim() : (ipRaw as any);
+    const ip = getClientIp(req);
+
+    // Validate inputs early
+    if (!isEmailLike(email)) {
+      return NextResponse.json({ message: "Enter a valid email." }, { status: 400 });
+    }
 
     // Turnstile required
     const captcha = await verifyTurnstile(captchaToken, ip);
@@ -84,12 +99,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!isEmailLike(email)) {
-      return NextResponse.json({ message: "Enter a valid email." }, { status: 400 });
-    }
-
     const isProd = process.env.NODE_ENV === "production";
     if (isProd && !emailConfigured()) {
+      // Global config problem: OK to be explicit
       return NextResponse.json(
         { message: "Email service is not configured. Please try again later." },
         { status: 500 }
@@ -101,13 +113,13 @@ export async function POST(req: Request) {
       select: { id: true, firstName: true },
     });
 
-    // record attempt (do not block flow if it fails)
+    // Record attempt (do not block flow if it fails)
     await prisma.passwordResetRequestAttempt
       .create({
         data: {
           userId: user?.id ?? null,
           email,
-          ipAddress: typeof ip === "string" ? ip : null,
+          ipAddress: ip,
         },
       })
       .catch(() => {});
@@ -127,7 +139,8 @@ export async function POST(req: Request) {
     const tokenHash = sha256Hex(rawToken);
 
     const minutes = Number.isFinite(RESET_TOKEN_TTL_MINUTES) ? RESET_TOKEN_TTL_MINUTES : 30;
-    const expiresAt = new Date(Date.now() + minutes * 60_000);
+    const safeMinutes = Math.max(1, Math.min(minutes, 60 * 24)); // clamp 1 min .. 24h
+    const expiresAt = new Date(Date.now() + safeMinutes * 60_000);
 
     await prisma.passwordResetToken.create({
       data: {
@@ -142,19 +155,32 @@ export async function POST(req: Request) {
 
     if (!isProd) {
       console.log("DEV PASSWORD RESET LINK:", resetLink);
-      return NextResponse.json({ message: neutralOk, devResetLink: resetLink }, { status: 200 });
+      return NextResponse.json(
+        { message: neutralOk, devResetLink: resetLink },
+        { status: 200 }
+      );
     }
 
-    await sendEmail({
-      to: email,
-      subject: "Password reset",
-      html: buildResetHtml({ resetLink, firstName: user.firstName || undefined }),
-      text: `Reset your password: ${resetLink}`,
-    });
+    // Send email (from is enforced by SES_FROM_EMAIL in mailer.ts)
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Password reset",
+        html: buildResetHtml({ resetLink, firstName: user.firstName || undefined }),
+        text: `Reset your password: ${resetLink}`,
+      });
+    } catch (sendErr) {
+      console.error("PASSWORD_RESET_EMAIL_SEND_ERROR:", sendErr);
+      return NextResponse.json(
+        { message: "Email service is not configured. Please try again later." },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ message: neutralOk }, { status: 200 });
   } catch (e) {
     console.error("REQUEST_PASSWORD_RESET_ERROR:", e);
+    // Avoid leaking anything
     return NextResponse.json({ message: neutralOk }, { status: 200 });
   }
 }
