@@ -141,7 +141,7 @@ export default function AllCoursesPage() {
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustives-deps
   }, [query]);
 
   const byCategory = useMemo(() => {

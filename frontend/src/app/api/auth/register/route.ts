@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { verifyTurnstile } from "@/lib/turnstile";
+import { emailConfigured, sendEmail } from "@/lib/mailer";
 
 // ✅ CHANGE (CourseDig): helpers for new mandatory identity fields
 function normaliseSpaces(v: string) {
@@ -34,7 +35,9 @@ function parseDob(dateStr: string): Date | null {
 
   // must be in the past (not today / future)
   const today = new Date();
-  const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const todayUTC = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  );
   if (d.getTime() >= todayUTC.getTime()) return null;
 
   return d;
@@ -56,6 +59,7 @@ function sha256Hex(input: string) {
 function getBaseUrl(req: Request) {
   // Prefer explicit envs (best for production)
   const envUrl =
+    process.env.APP_BASE_URL ||
     process.env.APP_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
@@ -66,6 +70,39 @@ function getBaseUrl(req: Request) {
   const proto = req.headers.get("x-forwarded-proto") || "http";
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
   return `${proto}://${host}`.replace(/\/+$/, "");
+}
+
+function buildVerifyEmailHtml(params: {
+  firstName?: string;
+  verifyLink: string;
+  baseUrl: string;
+}) {
+  const name = (params.firstName || "").trim();
+  const greeting = name ? `Hi ${name},` : "Hi,";
+  const link = params.verifyLink;
+
+  return `
+  <div style="font-family: Arial, Helvetica, sans-serif; line-height: 1.5; color: #111;">
+    <h2 style="margin:0 0 12px 0;">Verify your email</h2>
+    <p style="margin:0 0 12px 0;">${greeting}</p>
+    <p style="margin:0 0 12px 0;">
+      Thanks for creating your CourseDig account. Please verify your email address by clicking the button below:
+    </p>
+    <p style="margin:18px 0;">
+      <a href="${link}" style="display:inline-block;padding:10px 16px;background:#111827;color:#fff;text-decoration:none;border-radius:8px;">
+        Verify email
+      </a>
+    </p>
+    <p style="margin:0 0 12px 0;">
+      If the button doesn’t work, copy and paste this link into your browser:
+      <br />
+      <a href="${link}">${link}</a>
+    </p>
+    <p style="margin:18px 0 0 0;font-size:12px;color:#555;">
+      If you didn’t create an account, you can ignore this email.
+    </p>
+  </div>
+  `.trim();
 }
 
 export async function POST(req: Request) {
@@ -159,7 +196,7 @@ export async function POST(req: Request) {
       select: { id: true, email: true },
     });
 
-    // Create verification token record (no dependency on emailVerification.ts)
+    // Create verification token record
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = sha256Hex(rawToken);
 
@@ -181,24 +218,46 @@ export async function POST(req: Request) {
 
     /**
      * EMAIL SENDING
-     * - DEV: log the verification link (so you can click it)
-     * - PROD: you should send a real email (we will add SES / Resend / etc)
+     * - DEV: log the verification link + return devVerifyLink/devVerifyUrl
+     * - PROD: send SMTP email (HostGator)
      */
     const isProd = process.env.NODE_ENV === "production";
 
     if (!isProd) {
       console.log("DEV EMAIL (verification link):", verifyLink);
     } else {
-      const hasSenderConfigured =
-        !!process.env.AWS_REGION &&
-        !!process.env.AWS_ACCESS_KEY_ID &&
-        !!process.env.AWS_SECRET_ACCESS_KEY &&
-        !!process.env.SES_FROM_EMAIL;
-
-      if (!hasSenderConfigured) {
+      // ✅ SMTP must be configured in runtime (.env.production copied into compute)
+      if (!emailConfigured()) {
         // rollback so users don’t get stuck
         await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } }).catch(() => {});
         await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+        return NextResponse.json(
+          { message: "Email service is not configured. Please try again later." },
+          { status: 500 }
+        );
+      }
+
+      const subject = "Verify your CourseDig email";
+      const html = buildVerifyEmailHtml({
+        firstName,
+        verifyLink,
+        baseUrl,
+      });
+
+      try {
+        await sendEmail({
+          to: email,
+          subject,
+          html,
+          text: `Verify your email: ${verifyLink}`,
+        });
+      } catch (sendErr) {
+        console.error("REGISTER_EMAIL_SEND_ERROR:", sendErr);
+
+        // rollback so users don’t get stuck
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } }).catch(() => {});
+        await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+
         return NextResponse.json(
           { message: "Email service is not configured. Please try again later." },
           { status: 500 }
@@ -209,8 +268,6 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         message: "Account created. Please check your email to verify your address before applying.",
-
-        // ✅ CHANGE (CourseDig): keep existing key, and also add devVerifyUrl (UI-friendly)
         ...(process.env.NODE_ENV !== "production"
           ? { devVerifyLink: verifyLink, devVerifyUrl: verifyLink }
           : {}),

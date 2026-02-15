@@ -1,6 +1,7 @@
+// frontend/src/app/components/NewsletterForm.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import TurnstileWidget from "@/app/components/TurnstileWidget";
 
 function isEmailLike(email: string) {
@@ -18,14 +19,43 @@ export default function NewsletterForm() {
 
   const emailValid = useMemo(() => isEmailLike(email), [email]);
 
-  const captchaRequired = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  // Whether captcha is configured at all
+  const captchaConfigured = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
+  /**
+   * ✅ FIX: Only show captcha after user has entered a valid email.
+   * This stops “Success” appearing on empty forms and reduces auto-verification noise.
+   */
+  const shouldShowCaptcha = useMemo(() => {
+    if (!captchaConfigured) return false;
+    if (loading) return false;
+    if (!emailValid) return false;
+    return true;
+  }, [captchaConfigured, emailValid, loading]);
+
+  /**
+   * ✅ FIX: Stable callback so TurnstileWidget doesn't re-render/re-initialise repeatedly.
+   */
+  const handleCaptchaToken = useCallback((t: string) => {
+    setCaptchaToken(t || "");
+  }, []);
+
+  /**
+   * ✅ Optional safety: if the user changes email, clear captcha token
+   * so they must re-verify for the new value.
+   */
+  useEffect(() => {
+    setCaptchaToken("");
+    // Don’t constantly re-mount the widget while typing.
+    // Only bump captchaKey when we intentionally want a reset (e.g., after submit).
+  }, [email]);
 
   const canSubmit = useMemo(() => {
     if (!emailValid) return false;
-    if (captchaRequired && !captchaToken) return false;
+    if (captchaConfigured && !captchaToken) return false;
     if (loading) return false;
     return true;
-  }, [emailValid, captchaRequired, captchaToken, loading]);
+  }, [emailValid, captchaConfigured, captchaToken, loading]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,14 +63,14 @@ export default function NewsletterForm() {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // ✅ HARD STOP: invalid email
+    // HARD STOP: invalid email
     if (!isEmailLike(cleanEmail)) {
       setMsg("Please enter a valid email address.");
       return;
     }
 
-    // ✅ HARD STOP: captcha missing
-    if (captchaRequired && !captchaToken) {
+    // HARD STOP: captcha missing (only if configured)
+    if (captchaConfigured && !captchaToken) {
       setMsg("Please complete the captcha to continue.");
       return;
     }
@@ -71,6 +101,8 @@ export default function NewsletterForm() {
       setMsg("Unable to subscribe right now.");
     } finally {
       setLoading(false);
+
+      // ✅ Reset captcha after submit (success OR fail)
       setCaptchaToken("");
       setCaptchaKey((k) => k + 1);
     }
@@ -92,6 +124,7 @@ export default function NewsletterForm() {
           onChange={(e) => setEmail(e.target.value)}
           inputMode="email"
           autoComplete="email"
+          disabled={loading}
         />
 
         <button
@@ -109,18 +142,27 @@ export default function NewsletterForm() {
 
       {/* Inline email validation */}
       {email.length > 0 && !emailValid && (
-        <p className="text-xs text-red-600">Please enter a valid email address.</p>
+        <p className="text-xs text-red-600">
+          Please enter a valid email address.
+        </p>
       )}
 
-      {/* Cloudflare Turnstile */}
-      {captchaRequired && (
+      {/* ✅ Cloudflare Turnstile only after valid email */}
+      {shouldShowCaptcha && (
         <div className="pt-2">
           <TurnstileWidget
             key={captchaKey}
-            onToken={(t) => setCaptchaToken(t)}
+            onToken={handleCaptchaToken}
             theme="light"
           />
         </div>
+      )}
+
+      {/* If captcha is configured and email is valid, but token not yet present */}
+      {captchaConfigured && emailValid && !captchaToken && !loading && (
+        <p className="text-xs text-gray-600">
+          Please complete the security check to subscribe.
+        </p>
       )}
 
       {msg && <p className="text-sm opacity-80">{msg}</p>}

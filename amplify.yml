@@ -6,16 +6,53 @@ applications:
         preBuild:
           commands:
             - npm ci --include=dev --no-audit --ignore-scripts
-            - npx prisma generate
+
         build:
           commands:
+            # 1) Create env file from Amplify Console env vars (build-time)
+            - rm -f .env.production
+
+            # --- DB (required) ---
+            - printf "DATABASE_URL=%s\n" "$DATABASE_URL" >> .env.production
+            - printf "DATABASE_DIRECT_URL=%s\n" "$DATABASE_DIRECT_URL" >> .env.production
+
+            # --- Email / SMTP (add these) ---
+            - printf "SMTP_HOST=%s\n" "$SMTP_HOST" >> .env.production
+            - printf "SMTP_PORT=%s\n" "$SMTP_PORT" >> .env.production
+            - printf "SMTP_USER=%s\n" "$SMTP_USER" >> .env.production
+            - printf "SMTP_PASS=%s\n" "$SMTP_PASS" >> .env.production
+            - printf "SMTP_SECURE=%s\n" "$SMTP_SECURE" >> .env.production
+
+            # --- App email identities ---
+            - printf "SES_FROM_EMAIL=%s\n" "$SES_FROM_EMAIL" >> .env.production
+            - printf "SES_ADMIN_EMAIL=%s\n" "$SES_ADMIN_EMAIL" >> .env.production
+
+            # --- Base URL (useful for verification links) ---
+            - printf "APP_BASE_URL=%s\n" "$APP_BASE_URL" >> .env.production
+
+            - echo "✅ wrote .env.production" && wc -l .env.production
+
+            # 2) Prisma (uses build-time env vars OR .env.production)
+            - npx prisma generate
             - npx prisma migrate deploy
             - npx prisma db seed
+
+            # 3) Build Next.js
             - npm run build
+
+        postBuild:
+          commands:
+            # 4) Copy env file into the SSR compute bundle so runtime can load it
+            - mkdir -p .amplify-hosting/compute/default/
+            - cp .env.production .amplify-hosting/compute/default/.env.production
+            - echo "✅ copied .env.production into compute bundle"
+            - ls -la .amplify-hosting/compute/default/ || true
+
       artifacts:
         baseDirectory: .next
         files:
           - "**/*"
+
       cache:
         paths:
           - node_modules/**/*
