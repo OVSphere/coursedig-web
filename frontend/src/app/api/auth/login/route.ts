@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { createSession } from "@/lib/auth";
-import { verifyTurnstile } from "@/lib/turnstile";
 
 function isEmailLike(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -22,21 +21,6 @@ export async function POST(req: Request) {
     const password = String(body.password ?? "");
     const next = safeRedirect(body.next);
 
-    // CAPTCHA
-    const captchaToken = String(body.captchaToken ?? "");
-    const ip =
-      req.headers.get("cf-connecting-ip") ||
-      req.headers.get("x-forwarded-for") ||
-      null;
-
-    const captcha = await verifyTurnstile(captchaToken, ip);
-    if (!captcha.ok) {
-      return NextResponse.json(
-        { message: captcha.message || "Captcha verification failed." },
-        { status: 400 }
-      );
-    }
-
     // Basic validation (neutral wording: avoid enumeration)
     if (!isEmailLike(email) || !password) {
       return NextResponse.json(
@@ -51,9 +35,6 @@ export async function POST(req: Request) {
         id: true,
         passwordHash: true,
         emailVerifiedAt: true,
-        // you can select these later if the client needs it
-        // isAdmin: true,
-        // isSuperAdmin: true,
       },
     });
 
@@ -73,7 +54,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ Allow login even if unverified
+    // Allow login even if unverified (client can gate restricted routes)
     await createSession(user.id);
 
     const verified = !!user.emailVerifiedAt;
@@ -87,8 +68,7 @@ export async function POST(req: Request) {
       { status: 200 }
     );
 
-    // ✅ Let the client know where it *wanted* to go
-    // Client should override redirect to /verify-email-gate if requiresVerification=true
+    // Let the client know where it wanted to go
     res.headers.set("X-Redirect-To", next);
 
     return res;

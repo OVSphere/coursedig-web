@@ -9,8 +9,6 @@ const AWS_REGION =
 const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL;
 const SES_ADMIN_EMAIL = process.env.SES_ADMIN_EMAIL;
 
-const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || "";
-
 const ses = new SESClient({ region: AWS_REGION });
 
 function currentYear(date = new Date()) {
@@ -49,9 +47,10 @@ function buildStructuredMessage(params: {
     lines.push(`[SCHOLARSHIP] ${safeLine(params.scholarshipType)}`);
   if (params.applicationRef)
     lines.push(`[APPLICATION_REF] ${safeLine(params.applicationRef)}`);
-  if (params.paymentRef) lines.push(`[PAYMENT_REF] ${safeLine(params.paymentRef)}`);
+  if (params.paymentRef)
+    lines.push(`[PAYMENT_REF] ${safeLine(params.paymentRef)}`);
 
-  lines.push(""); // spacer
+  lines.push("");
   lines.push(params.userMessage || "");
 
   return lines.join("\n");
@@ -80,45 +79,10 @@ async function sendEmail(params: {
   await ses.send(cmd);
 }
 
-async function verifyTurnstile(token: string, ip?: string) {
-  // If not configured, skip in dev; enforce in production
-  const isProd = process.env.NODE_ENV === "production";
-
-  if (!TURNSTILE_SECRET_KEY) {
-    return {
-      ok: !isProd,
-      reason: isProd ? "Turnstile not configured" : "Skipped (dev)",
-    };
-  }
-
-  if (!token) return { ok: false, reason: "Missing security token" };
-
-  const form = new URLSearchParams();
-  form.set("secret", TURNSTILE_SECRET_KEY);
-  form.set("response", token);
-  if (ip) form.set("remoteip", ip);
-
-  const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: form.toString(),
-  });
-
-  const data: any = await r.json().catch(() => ({}));
-
-  if (!data?.success) {
-    return { ok: false, reason: "Security check failed" };
-  }
-
-  return { ok: true as const };
-}
-
 function getClientIp(req: Request) {
-  // Cloudflare → cf-connecting-ip
   const cf = req.headers.get("cf-connecting-ip");
   if (cf) return cf;
 
-  // Proxies → x-forwarded-for (first IP)
   const xff = req.headers.get("x-forwarded-for");
   if (xff) return xff.split(",")[0]?.trim();
 
@@ -126,33 +90,27 @@ function getClientIp(req: Request) {
 }
 
 /* =========================================================
-   ✅ NEW VALIDATION RULES (CourseDig)
+   VALIDATION RULES (CourseDig)
    - Message min 200 chars / max 2000 chars
-   - Full name min 5 words
+   - Full name required (no word-count rule)
    - Email required + valid format
    ========================================================= */
 const MIN_MESSAGE_CHARS = 200;
 const MAX_MESSAGE_CHARS = 2000;
-const MIN_NAME_WORDS = 5;
-
-function countWords(s: string) {
-  return String(s || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length;
-}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
 
-    const enquiryType = String(body.enquiryType ?? "GENERAL").trim().toUpperCase();
+    const enquiryType = String(body.enquiryType ?? "GENERAL")
+      .trim()
+      .toUpperCase();
+
     const fullName = String(body.fullName ?? "").trim();
     const email = String(body.email ?? "").trim().toLowerCase();
     const phone = String(body.phone ?? "").trim();
     const userMessage = String(body.message ?? "").trim();
 
-    // Conditional fields (optional)
     const courseInterestedIn = String(body.courseInterestedIn ?? "").trim();
     const preferredStartDate = String(body.preferredStartDate ?? "").trim();
     const studyMode = String(body.studyMode ?? "").trim();
@@ -161,23 +119,15 @@ export async function POST(req: Request) {
     const paymentRef = String(body.paymentRef ?? "").trim();
     const bestContactMethod = String(body.bestContactMethod ?? "").trim();
 
-    // Anti-bot
     const hp = String(body.hp ?? "").trim();
-    const turnstileToken = String(body.turnstileToken ?? "").trim();
 
-    // Honeypot: if filled → bot
     if (hp) {
       return NextResponse.json({ message: "Request blocked." }, { status: 400 });
     }
 
-    // ================================
-    // ✅ STRICT SERVER-SIDE VALIDATION
-    // ================================
-    if (!fullName || countWords(fullName) < MIN_NAME_WORDS) {
+    if (!fullName || fullName.length < 2) {
       return NextResponse.json(
-        {
-          message: `Please enter your full name using at least ${MIN_NAME_WORDS} words.`,
-        },
+        { message: "Please enter your full name." },
         { status: 400 }
       );
     }
@@ -207,7 +157,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Light rule: if application progress, require a ref
     if (enquiryType === "APPLICATION_PROGRESS" && applicationRef.length < 6) {
       return NextResponse.json(
         {
@@ -220,16 +169,6 @@ export async function POST(req: Request) {
 
     const ip = getClientIp(req);
 
-    // Turnstile verification
-    const ts = await verifyTurnstile(turnstileToken, ip);
-    if (!ts.ok) {
-      return NextResponse.json(
-        { message: ts.reason || "Security check failed. Please try again." },
-        { status: 400 }
-      );
-    }
-
-    // Store structured info inside message (no schema change)
     const message = buildStructuredMessage({
       enquiryType,
       bestContactMethod,

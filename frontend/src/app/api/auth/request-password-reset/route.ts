@@ -1,8 +1,7 @@
-//frontend/src/app/api/auth/request-password-reset/route.ts
+// frontend/src/app/api/auth/request-password-reset/route.ts
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { verifyTurnstile } from "@/lib/turnstile";
 import { emailConfigured, sendEmail } from "@/lib/mailer";
 
 function isEmailLike(email: string) {
@@ -39,7 +38,10 @@ function getBaseUrl(req: Request) {
 
   const proto = req.headers.get("x-forwarded-proto") || "http";
   const host =
-    req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
+    req.headers.get("x-forwarded-host") ||
+    req.headers.get("host") ||
+    "localhost:3000";
+
   return `${proto}://${host}`.replace(/\/+$/, "");
 }
 
@@ -81,27 +83,15 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const email = String(body.email ?? "").trim().toLowerCase();
-    const captchaToken = String(body.captchaToken ?? "");
 
     const ip = getClientIp(req);
 
-    // Validate inputs early
     if (!isEmailLike(email)) {
       return NextResponse.json({ message: "Enter a valid email." }, { status: 400 });
     }
 
-    // Turnstile required
-    const captcha = await verifyTurnstile(captchaToken, ip);
-    if (!captcha.ok) {
-      return NextResponse.json(
-        { message: captcha.message || "Captcha verification failed." },
-        { status: 400 }
-      );
-    }
-
     const isProd = process.env.NODE_ENV === "production";
     if (isProd && !emailConfigured()) {
-      // Global config problem: OK to be explicit
       return NextResponse.json(
         { message: "Email service is not configured. Please try again later." },
         { status: 500 }
@@ -114,6 +104,8 @@ export async function POST(req: Request) {
     });
 
     // Record attempt (do not block flow if it fails)
+    // NOTE: Prisma client property name is based on model name (PascalCase -> camelCase)
+    // Model: PasswordResetRequestAttempt -> prisma.passwordResetRequestAttempt
     await prisma.passwordResetRequestAttempt
       .create({
         data: {
@@ -134,7 +126,6 @@ export async function POST(req: Request) {
       where: { userId: user.id },
     });
 
-    // Create token
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = sha256Hex(rawToken);
 
@@ -155,13 +146,9 @@ export async function POST(req: Request) {
 
     if (!isProd) {
       console.log("DEV PASSWORD RESET LINK:", resetLink);
-      return NextResponse.json(
-        { message: neutralOk, devResetLink: resetLink },
-        { status: 200 }
-      );
+      return NextResponse.json({ message: neutralOk, devResetLink: resetLink }, { status: 200 });
     }
 
-    // Send email (from is enforced by SES_FROM_EMAIL in mailer.ts)
     try {
       await sendEmail({
         to: email,
@@ -180,7 +167,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: neutralOk }, { status: 200 });
   } catch (e) {
     console.error("REQUEST_PASSWORD_RESET_ERROR:", e);
-    // Avoid leaking anything
     return NextResponse.json({ message: neutralOk }, { status: 200 });
   }
 }

@@ -1,9 +1,7 @@
-//frontend/src/app/api/auth/register/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { verifyTurnstile } from "@/lib/turnstile";
 import { emailConfigured, sendEmail } from "@/lib/mailer";
 
 function normaliseSpaces(v: string) {
@@ -25,9 +23,7 @@ function parseDob(dateStr: string): Date | null {
   if (Number.isNaN(d.getTime())) return null;
 
   const today = new Date();
-  const todayUTC = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
-  );
+  const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
   if (d.getTime() >= todayUTC.getTime()) return null;
 
   return d;
@@ -38,7 +34,7 @@ function isEmailLike(email: string) {
 }
 
 const MIN_PASSWORD_LEN = 8;
-const VERIFY_TOKEN_TTL_HOURS = Number(process.env.VERIFY_TOKEN_TTL_HOURS ?? 24);
+const VERIFY_TOKEN_TTL_MINUTES = Number(process.env.VERIFY_TOKEN_TTL_MINUTES ?? 10);
 
 function sha256Hex(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex");
@@ -54,15 +50,15 @@ function getBaseUrl(req: Request) {
   if (envUrl) return envUrl.replace(/\/+$/, "");
 
   const proto = req.headers.get("x-forwarded-proto") || "http";
-  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
+  const host =
+    req.headers.get("x-forwarded-host") ||
+    req.headers.get("host") ||
+    "localhost:3000";
+
   return `${proto}://${host}`.replace(/\/+$/, "");
 }
 
-function buildVerifyEmailHtml(params: {
-  firstName?: string;
-  verifyLink: string;
-  baseUrl: string;
-}) {
+function buildVerifyEmailHtml(params: { firstName?: string; verifyLink: string }) {
   const name = (params.firstName || "").trim();
   const greeting = name ? `Hi ${name},` : "Hi,";
   const link = params.verifyLink;
@@ -104,25 +100,6 @@ export async function POST(req: Request) {
     const phoneNumber = normaliseSpaces(String(body.phoneNumber ?? ""));
     const dob = parseDob(String(body.dateOfBirth ?? ""));
 
-    const captchaToken = String(body.captchaToken ?? "");
-
-    // ✅ FIX: use first IP only (x-forwarded-for often contains a list)
-    const ipRaw =
-      req.headers.get("cf-connecting-ip") ||
-      req.headers.get("x-forwarded-for") ||
-      null;
-
-    const ip =
-      typeof ipRaw === "string" ? ipRaw.split(",")[0].trim() : (ipRaw as any);
-
-    const captcha = await verifyTurnstile(captchaToken, ip);
-    if (!captcha.ok) {
-      return NextResponse.json(
-        { message: captcha.message || "Captcha verification failed. Please try again." },
-        { status: 400 }
-      );
-    }
-
     if (firstName.length < 2) {
       return NextResponse.json({ message: "Please enter your first name." }, { status: 400 });
     }
@@ -153,10 +130,7 @@ export async function POST(req: Request) {
     });
 
     if (exists) {
-      return NextResponse.json(
-        { message: "Email already registered. Please login." },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: "Email already registered. Please login." }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -168,24 +142,23 @@ export async function POST(req: Request) {
         fullName: derivedFullName || null,
         passwordHash,
         emailVerifiedAt: null,
-
         firstName,
         lastName,
         phoneNumber,
         dateOfBirth: dob,
-
         profileLockedAt: new Date(),
       },
       select: { id: true, email: true },
     });
 
+    // Clear any old tokens (tidy)
+    await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } }).catch(() => {});
+
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = sha256Hex(rawToken);
 
-    const expiresAt = new Date();
-    expiresAt.setHours(
-      expiresAt.getHours() + (Number.isFinite(VERIFY_TOKEN_TTL_HOURS) ? VERIFY_TOKEN_TTL_HOURS : 24)
-    );
+    const minutes = Number.isFinite(VERIFY_TOKEN_TTL_MINUTES) ? VERIFY_TOKEN_TTL_MINUTES : 10;
+    const expiresAt = new Date(Date.now() + minutes * 60_000);
 
     await prisma.emailVerificationToken.create({
       data: {
@@ -212,31 +185,12 @@ export async function POST(req: Request) {
         );
       }
 
-      const subject = "Verify your CourseDig email";
-      const html = buildVerifyEmailHtml({
-        firstName,
-        verifyLink,
-        baseUrl,
+      await sendEmail({
+        to: email,
+        subject: "Verify your CourseDig email",
+        html: buildVerifyEmailHtml({ firstName, verifyLink }),
+        text: `Verify your email: ${verifyLink}`,
       });
-
-      try {
-        await sendEmail({
-          to: email,
-          subject,
-          html,
-          text: `Verify your email: ${verifyLink}`,
-        });
-      } catch (sendErr) {
-        console.error("REGISTER_EMAIL_SEND_ERROR:", sendErr);
-
-        await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } }).catch(() => {});
-        await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
-
-        return NextResponse.json(
-          { message: "Email service is not configured. Please try again later." },
-          { status: 500 }
-        );
-      }
     }
 
     return NextResponse.json(

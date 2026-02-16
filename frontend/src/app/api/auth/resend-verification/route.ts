@@ -1,15 +1,13 @@
-// src/app/api/auth/resend-verification/route.ts
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { verifyTurnstile } from "@/lib/turnstile";
 import { emailConfigured, sendEmail } from "@/lib/mailer";
 
 function isEmailLike(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-const VERIFY_TOKEN_TTL_HOURS = Number(process.env.VERIFY_TOKEN_TTL_HOURS ?? 24);
+const VERIFY_TOKEN_TTL_MINUTES = Number(process.env.VERIFY_TOKEN_TTL_MINUTES ?? 10);
 
 function sha256Hex(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex");
@@ -25,7 +23,11 @@ function getBaseUrl(req: Request) {
   if (envUrl) return envUrl.replace(/\/+$/, "");
 
   const proto = req.headers.get("x-forwarded-proto") || "http";
-  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
+  const host =
+    req.headers.get("x-forwarded-host") ||
+    req.headers.get("host") ||
+    "localhost:3000";
+
   return `${proto}://${host}`.replace(/\/+$/, "");
 }
 
@@ -38,9 +40,7 @@ function buildResendHtml(params: { verifyLink: string; firstName?: string }) {
   <div style="font-family: Arial, Helvetica, sans-serif; line-height: 1.5; color: #111;">
     <h2 style="margin:0 0 12px 0;">Verify your email</h2>
     <p style="margin:0 0 12px 0;">${greeting}</p>
-    <p style="margin:0 0 12px 0;">
-      Here is your new verification link:
-    </p>
+    <p style="margin:0 0 12px 0;">Here is your new verification link:</p>
     <p style="margin:18px 0;">
       <a href="${link}" style="display:inline-block;padding:10px 16px;background:#111827;color:#fff;text-decoration:none;border-radius:8px;">
         Verify email
@@ -68,30 +68,12 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const email = String(body.email ?? "").trim().toLowerCase();
 
-    const captchaToken = String(body.captchaToken ?? "");
-    const ipRaw =
-      req.headers.get("cf-connecting-ip") ||
-      req.headers.get("x-forwarded-for") ||
-      null;
-
-    const ip = typeof ipRaw === "string" ? ipRaw.split(",")[0].trim() : (ipRaw as any);
-
-    // Turnstile required
-    const captcha = await verifyTurnstile(captchaToken, ip);
-    if (!captcha.ok) {
-      return NextResponse.json(
-        { message: captcha.message || "Captcha verification failed." },
-        { status: 400 }
-      );
-    }
-
     if (!isEmailLike(email)) {
       return NextResponse.json({ message: "Enter a valid email." }, { status: 400 });
     }
 
     const isProd = process.env.NODE_ENV === "production";
     if (isProd && !emailConfigured()) {
-      // global config problem; OK to be explicit
       return NextResponse.json(
         { message: "Email service is not configured. Please try again later." },
         { status: 500 }
@@ -103,19 +85,20 @@ export async function POST(req: Request) {
       select: { id: true, emailVerifiedAt: true, firstName: true },
     });
 
-    // Neutral response (no enumeration)
     if (!user || user.emailVerifiedAt) {
       return NextResponse.json({ message: neutralOk }, { status: 200 });
     }
 
-    // Create a new token
+    // Optional: clear old tokens for this user (keeps DB tidy)
+    await prisma.emailVerificationToken.deleteMany({
+      where: { userId: user.id },
+    });
+
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = sha256Hex(rawToken);
 
-    const expiresAt = new Date();
-    expiresAt.setHours(
-      expiresAt.getHours() + (Number.isFinite(VERIFY_TOKEN_TTL_HOURS) ? VERIFY_TOKEN_TTL_HOURS : 24)
-    );
+    const minutes = Number.isFinite(VERIFY_TOKEN_TTL_MINUTES) ? VERIFY_TOKEN_TTL_MINUTES : 10;
+    const expiresAt = new Date(Date.now() + minutes * 60_000);
 
     await prisma.emailVerificationToken.create({
       data: {
@@ -130,32 +113,19 @@ export async function POST(req: Request) {
 
     if (!isProd) {
       console.log("DEV RESEND VERIFY LINK:", verifyLink);
-      return NextResponse.json(
-        { message: neutralOk, devVerifyLink: verifyLink },
-        { status: 200 }
-      );
+      return NextResponse.json({ message: neutralOk, devVerifyLink: verifyLink }, { status: 200 });
     }
 
-    // Send email via SMTP
-    try {
-      await sendEmail({
-        to: email,
-        subject: "Your CourseDig verification link",
-        html: buildResendHtml({ verifyLink, firstName: user.firstName || undefined }),
-        text: `Verify your email: ${verifyLink}`,
-      });
-    } catch (sendErr) {
-      console.error("RESEND_VERIFY_EMAIL_SEND_ERROR:", sendErr);
-      return NextResponse.json(
-        { message: "Email service is not configured. Please try again later." },
-        { status: 500 }
-      );
-    }
+    await sendEmail({
+      to: email,
+      subject: "Your CourseDig verification link",
+      html: buildResendHtml({ verifyLink, firstName: user.firstName || undefined }),
+      text: `Verify your email: ${verifyLink}`,
+    });
 
     return NextResponse.json({ message: neutralOk }, { status: 200 });
   } catch (e) {
     console.error("RESEND_VERIFY_ERROR:", e);
-    // Still avoid leaking anything
     return NextResponse.json({ message: neutralOk }, { status: 200 });
   }
 }

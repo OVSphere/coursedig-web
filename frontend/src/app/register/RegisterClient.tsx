@@ -1,10 +1,9 @@
-//frontend/src/app/register/RegisterClient.tsx
+// frontend/src/app/register/RegisterClient.tsx
 "use client";
 
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import TurnstileWidget from "@/app/components/TurnstileWidget";
 
 const MIN_PASSWORD_LEN = 8;
 
@@ -44,7 +43,9 @@ function getPwChecks(pw: string): PwChecks {
 }
 
 function isPwStrong(checks: PwChecks) {
-  return checks.minLen && checks.upper && checks.lower && checks.number && checks.special;
+  return (
+    checks.minLen && checks.upper && checks.lower && checks.number && checks.special
+  );
 }
 
 function normaliseSpaces(v: string) {
@@ -64,7 +65,9 @@ function isValidDobISO(yyyyMmDd: string) {
   const d = new Date(`${v}T00:00:00.000Z`);
   if (Number.isNaN(d.getTime())) return false;
   const today = new Date();
-  const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const todayUTC = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  );
   return d.getTime() < todayUTC.getTime();
 }
 
@@ -84,9 +87,6 @@ export default function RegisterClient() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  const [captchaToken, setCaptchaToken] = useState("");
-  const [resetSignal, setResetSignal] = useState(0);
 
   const [busy, setBusy] = useState(false);
 
@@ -136,8 +136,7 @@ export default function RegisterClient() {
     identityOk &&
     isEmailLike(email) &&
     pwStrong &&
-    password === confirmPassword &&
-    !!captchaToken;
+    password === confirmPassword;
 
   const inputClass =
     "mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 " +
@@ -178,7 +177,8 @@ export default function RegisterClient() {
   }
 
   function passwordMissingMessage(checks: PwChecks) {
-    if (!checks.minLen) return `Password must be at least ${MIN_PASSWORD_LEN} characters long.`;
+    if (!checks.minLen)
+      return `Password must be at least ${MIN_PASSWORD_LEN} characters long.`;
     if (!checks.upper) return "Add at least one uppercase letter (A–Z).";
     if (!checks.lower) return "Add at least one lowercase letter (a–z).";
     if (!checks.number) return "Add at least one number (0–9).";
@@ -189,8 +189,10 @@ export default function RegisterClient() {
   function identityMissingMessage() {
     if (normaliseSpaces(firstName).length < 2) return "Please enter your first name.";
     if (normaliseSpaces(lastName).length < 2) return "Please enter your last name.";
-    if (!isPhoneLike(phoneNumber)) return "Please enter a valid phone number (e.g. +447… or 07…).";
-    if (!isValidDobISO(dateOfBirth)) return "Please enter a valid date of birth (must be in the past).";
+    if (!isPhoneLike(phoneNumber))
+      return "Please enter a valid phone number (e.g. +447… or 07…).";
+    if (!isValidDobISO(dateOfBirth))
+      return "Please enter a valid date of birth (must be in the past).";
     return null;
   }
 
@@ -238,11 +240,6 @@ export default function RegisterClient() {
       return;
     }
 
-    if (!captchaToken) {
-      setError("Please complete the captcha to continue.");
-      return;
-    }
-
     setBusy(true);
 
     try {
@@ -259,17 +256,12 @@ export default function RegisterClient() {
           fullName,
           email,
           password,
-          captchaToken,
         }),
       });
 
       if (!res.ok) {
         const msg = await safeReadError(res);
         setError(msg);
-
-        // ✅ Reset captcha after a failed attempt (prevents stale/expired token loops)
-        setCaptchaToken("");
-        setResetSignal((n) => n + 1);
         return;
       }
 
@@ -289,14 +281,8 @@ export default function RegisterClient() {
       if (maybeDevUrl) setDevVerifyUrl(maybeDevUrl);
 
       setStatus("success");
-
-      // ✅ Clear + reset captcha on success too
-      setCaptchaToken("");
-      setResetSignal((n) => n + 1);
     } catch (e: any) {
       setError(e?.message || "Registration failed.");
-      setCaptchaToken("");
-      setResetSignal((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -417,9 +403,6 @@ export default function RegisterClient() {
                         setSuccess(null);
                         setDevVerifyUrl(null);
 
-                        setCaptchaToken("");
-                        setResetSignal((n) => n + 1);
-
                         setPassword("");
                         setConfirmPassword("");
 
@@ -448,17 +431,132 @@ export default function RegisterClient() {
               ) : (
                 <>
                   <form onSubmit={onSubmit} className="space-y-4">
-                    {/* ... your form unchanged above ... */}
-
-                    <div className="pt-1">
-                      <TurnstileWidget
-                        onToken={setCaptchaToken}
-                        theme="light"
-                        resetSignal={resetSignal}
-                        appearance="always"
-                        action="register"
+                    {/* First name */}
+                    <div>
+                      <label className="text-sm font-semibold text-gray-900">First name *</label>
+                      <input
+                        className={firstNameInvalid ? inputInvalidClass : inputClass}
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        onBlur={() => setTouched((t) => ({ ...t, firstName: true }))}
+                        placeholder="First name"
+                        autoComplete="given-name"
                       />
-                      <p className="mt-2 text-xs text-gray-500">Please complete the captcha to continue.</p>
+                    </div>
+
+                    {/* Last name */}
+                    <div>
+                      <label className="text-sm font-semibold text-gray-900">Last name *</label>
+                      <input
+                        className={lastNameInvalid ? inputInvalidClass : inputClass}
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        onBlur={() => setTouched((t) => ({ ...t, lastName: true }))}
+                        placeholder="Last name"
+                        autoComplete="family-name"
+                      />
+                    </div>
+
+                    {/* Phone */}
+                    <div>
+                      <label className="text-sm font-semibold text-gray-900">Phone number *</label>
+                      <input
+                        className={phoneInvalid ? inputInvalidClass : inputClass}
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        onBlur={() => setTouched((t) => ({ ...t, phoneNumber: true }))}
+                        placeholder="+447… or 07…"
+                        inputMode="tel"
+                        autoComplete="tel"
+                      />
+                    </div>
+
+                    {/* DOB */}
+                    <div>
+                      <label className="text-sm font-semibold text-gray-900">Date of birth *</label>
+                      <input
+                        type="date"
+                        className={dobInvalid ? inputInvalidClass : inputClass}
+                        value={dateOfBirth}
+                        onChange={(e) => setDateOfBirth(e.target.value)}
+                        onBlur={() => setTouched((t) => ({ ...t, dateOfBirth: true }))}
+                        autoComplete="bday"
+                      />
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                      <label className="text-sm font-semibold text-gray-900">Email *</label>
+                      <input
+                        className={emailInvalid ? inputInvalidClass : inputClass}
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+                        placeholder="you@example.com"
+                        inputMode="email"
+                        autoComplete="email"
+                      />
+                    </div>
+
+                    {/* Password */}
+                    <div>
+                      <label className="text-sm font-semibold text-gray-900">Password *</label>
+                      <div className={touched.password && !pwStrong && password ? passwordWrapInvalidClass : passwordWrapClass}>
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          className={passwordInputClass}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+                          placeholder="Create a strong password"
+                          autoComplete="new-password"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((v) => !v)}
+                          className="px-3 text-sm font-semibold text-gray-700 hover:text-gray-900"
+                        >
+                          {showPassword ? "Hide" : "Show"}
+                        </button>
+                      </div>
+
+                      <ul className="mt-3 space-y-1 text-xs">
+                        {itemRow(pwChecks.minLen, `At least ${MIN_PASSWORD_LEN} characters`)}
+                        {itemRow(pwChecks.upper, "At least one uppercase letter")}
+                        {itemRow(pwChecks.lower, "At least one lowercase letter")}
+                        {itemRow(pwChecks.number, "At least one number")}
+                        {itemRow(pwChecks.special, "At least one special character")}
+                      </ul>
+                    </div>
+
+                    {/* Confirm password */}
+                    <div>
+                      <label className="text-sm font-semibold text-gray-900">Confirm password *</label>
+                      <div className={pwMismatch ? passwordWrapInvalidClass : passwordWrapClass}>
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          className={passwordInputClass}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          onBlur={() => setTouched((t) => ({ ...t, confirmPassword: true }))}
+                          placeholder="Confirm your password"
+                          autoComplete="new-password"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((v) => !v)}
+                          className="px-3 text-sm font-semibold text-gray-700 hover:text-gray-900"
+                        >
+                          {showConfirmPassword ? "Hide" : "Show"}
+                        </button>
+                      </div>
+
+                      {pwMatch ? (
+                        <p className="mt-2 text-xs text-green-700">Passwords match.</p>
+                      ) : null}
+                      {pwMismatch ? (
+                        <p className="mt-2 text-xs text-red-700">Passwords must match.</p>
+                      ) : null}
                     </div>
 
                     <button
@@ -475,7 +573,7 @@ export default function RegisterClient() {
 
                     {!canSubmit ? (
                       <p className="text-xs text-gray-500">
-                        Complete all required fields (*) and the captcha to enable submission.
+                        Complete all required fields (*) to enable submission.
                       </p>
                     ) : null}
 

@@ -4,7 +4,6 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import TurnstileWidget from "@/app/components/TurnstileWidget";
 
 export default function LoginClient() {
   const router = useRouter();
@@ -16,12 +15,11 @@ export default function LoginClient() {
   const [email, setEmail] = useState(emailPrefill);
   const [password, setPassword] = useState("");
 
-  const [captchaToken, setCaptchaToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [needsVerify, setNeedsVerify] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // ✅ Fix invisible typing issue: force readable input styles
+  // Force readable input styles
   const inputClass =
     "mt-2 w-full rounded-md border border-gray-300 bg-white text-gray-900 " +
     "placeholder-gray-400 px-4 py-3 text-sm outline-none " +
@@ -37,7 +35,7 @@ export default function LoginClient() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, captchaToken, next }),
+        body: JSON.stringify({ email, password, next }),
       });
 
       const json = await res.json().catch(() => ({}));
@@ -66,7 +64,7 @@ export default function LoginClient() {
       const res = await fetch("/api/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, captchaToken }),
+        body: JSON.stringify({ email }),
       });
 
       const json = await res.json().catch(() => ({}));
@@ -188,7 +186,6 @@ export default function LoginClient() {
                   />
                 </div>
 
-                {/* ✅ Forgot password link */}
                 <div className="flex items-center justify-end">
                   <Link
                     href={`/forgot-password?email=${encodeURIComponent(
@@ -200,18 +197,11 @@ export default function LoginClient() {
                   </Link>
                 </div>
 
-                <div className="pt-1">
-                  <TurnstileWidget onToken={setCaptchaToken} theme="light" />
-                  <p className="mt-2 text-xs text-gray-500">
-                    Please complete the captcha to continue.
-                  </p>
-                </div>
-
                 <button
                   type="submit"
-                  disabled={busy || !captchaToken}
+                  disabled={busy}
                   className={`w-full rounded-md px-6 py-3 text-sm font-semibold text-white ${
-                    busy || !captchaToken
+                    busy
                       ? "bg-gray-400 cursor-not-allowed"
                       : "bg-[color:var(--color-brand)] hover:bg-[color:var(--color-brand-dark)]"
                   }`}
@@ -223,7 +213,7 @@ export default function LoginClient() {
                   <button
                     type="button"
                     onClick={resendVerification}
-                    disabled={busy || !email || !captchaToken}
+                    disabled={busy || !email}
                     className="w-full rounded-md border border-gray-300 bg-white px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50"
                   >
                     Resend verification email

@@ -1,152 +1,132 @@
-// frontend/src/app/components/NewsletterForm.tsx
+//frontend/src/app/components/NewsletterForm.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import TurnstileWidget from "@/app/components/TurnstileWidget";
+import { useMemo, useState } from "react";
 
 function isEmailLike(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
 }
+
+type Status = "idle" | "success" | "info" | "error";
 
 export default function NewsletterForm() {
   const [email, setEmail] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  // Turnstile
-  const [captchaToken, setCaptchaToken] = useState("");
-  const [captchaKey, setCaptchaKey] = useState(0);
+  const [status, setStatus] = useState<Status>("idle");
+  const [message, setMessage] = useState<string | null>(null);
 
   const emailValid = useMemo(() => isEmailLike(email), [email]);
 
-  const captchaRequired = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const disabled = busy || !emailValid;
 
-  // ✅ Clear messages when user edits email.
-  // ✅ If captcha is required, also reset token + widget (prevents stale “Success!”)
-  useEffect(() => {
-    setMsg(null);
-
-    if (captchaRequired) {
-      setCaptchaToken("");
-      setCaptchaKey((k) => k + 1);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [email]);
-
-  const canSubmit = useMemo(() => {
-    if (!emailValid) return false;
-    if (captchaRequired && !captchaToken) return false;
-    if (loading) return false;
-    return true;
-  }, [emailValid, captchaRequired, captchaToken, loading]);
-
-  async function submit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setMsg(null);
 
-    const cleanEmail = email.trim().toLowerCase();
+    setMessage(null);
+    setStatus("idle");
 
-    if (!isEmailLike(cleanEmail)) {
-      setMsg("Please enter a valid email address.");
+    const cleaned = email.trim().toLowerCase();
+
+    if (!isEmailLike(cleaned)) {
+      setStatus("error");
+      setMessage("Please enter a valid email address.");
       return;
     }
 
-    if (captchaRequired && !captchaToken) {
-      setMsg("Please complete the security check to subscribe.");
-      return;
-    }
-
-    setLoading(true);
+    setBusy(true);
 
     try {
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: cleanEmail,
-          captchaToken,
-        }),
+        body: JSON.stringify({ email: cleaned }),
       });
 
-      const json = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => ({}));
 
-      if (res.status === 409 || json.status === "already_subscribed") {
-        setMsg("You’re already subscribed.");
-      } else if (res.ok && (json.status === "subscribed" || json.ok === true)) {
-        setMsg("Subscribed successfully. Thanks!");
+      if (res.status === 200 && data?.status === "subscribed") {
+        setStatus("success");
+        setMessage("You’re subscribed — please check your email for confirmation.");
         setEmail("");
-      } else {
-        setMsg(json.message || "Something went wrong.");
+        return;
       }
-    } catch {
-      setMsg("Unable to subscribe right now.");
+
+      if (res.status === 409 && data?.status === "already_subscribed") {
+        setStatus("info");
+        setMessage("You’re already subscribed. Thanks for staying with CourseDig.");
+        return;
+      }
+
+      setStatus("error");
+      setMessage(data?.message || "Subscribe failed. Please try again.");
+    } catch (err: any) {
+      setStatus("error");
+      setMessage(err?.message || "Subscribe failed. Please try again.");
     } finally {
-      setLoading(false);
-      setCaptchaToken("");
-      setCaptchaKey((k) => k + 1);
+      setBusy(false);
     }
   }
 
   return (
-    <form onSubmit={submit} className="space-y-2">
+    <form onSubmit={handleSubmit} className="space-y-2">
       <label className="text-sm font-medium">Subscribe to our newsletter</label>
 
       <div className="flex gap-2">
         <input
-          className={`w-full border rounded p-2 outline-none ${
+          className={`w-full rounded border p-2 outline-none ${
             email.length > 0 && !emailValid
               ? "border-red-400 focus:border-red-500"
               : "border-gray-300 focus:border-black"
           }`}
           placeholder="you@example.com"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setMessage(null);
+            setStatus("idle");
+          }}
           inputMode="email"
           autoComplete="email"
         />
 
         <button
           type="submit"
-          disabled={!canSubmit}
-          className={`px-4 py-2 rounded text-white ${
-            !canSubmit
-              ? "bg-gray-500 cursor-not-allowed"
+          disabled={disabled}
+          className={`rounded px-4 py-2 text-white ${
+            disabled
+              ? "cursor-not-allowed bg-gray-500"
               : "bg-black hover:bg-gray-800"
           }`}
         >
-          {loading ? "..." : "Subscribe"}
+          {busy ? "..." : "Subscribe"}
         </button>
       </div>
 
-      {/* Inline email validation */}
-      {email.length > 0 && !emailValid && (
+      {email.length > 0 && !emailValid ? (
         <p className="text-xs text-red-600">Please enter a valid email address.</p>
-      )}
-
-      {/* ✅ Helper message only after email is valid (and captcha is required + not completed) */}
-      {captchaRequired && emailValid && !captchaToken && (
+      ) : (
         <p className="text-xs text-gray-600">
-          Please complete the security check to subscribe.
+          We’ll only email you about CourseDig updates.
         </p>
       )}
 
-      {/* ✅ Turnstile ONLY appears after email becomes valid */}
-      {captchaRequired && emailValid && (
-        <div className="pt-2">
-          <TurnstileWidget
-            key={captchaKey}
-            onToken={(t) => {
-              setCaptchaToken(t || "");
-              if (t) setMsg(null);
-            }}
-            theme="light"
-            appearance="interaction-only"
-            action="newsletter_subscribe"
-          />
+      {message ? (
+        <div
+          className={[
+            "rounded-xl border p-3 text-sm",
+            status === "success"
+              ? "border-green-200 bg-green-50 text-green-800"
+              : status === "info"
+              ? "border-blue-200 bg-blue-50 text-blue-800"
+              : status === "error"
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-gray-200 bg-gray-50 text-gray-700",
+          ].join(" ")}
+        >
+          {message}
         </div>
-      )}
-
-      {msg && <p className="text-sm opacity-80">{msg}</p>}
+      ) : null}
     </form>
   );
 }

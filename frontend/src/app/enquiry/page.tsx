@@ -1,9 +1,8 @@
-//frontend/src/app/enquiry/page.tsx
+// frontend/src/app/enquiry/page.tsx
 "use client";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import TurnstileWidget from "@/app/components/TurnstileWidget";
 
 type EnquiryType =
   | "GENERAL"
@@ -18,14 +17,17 @@ type EnquiryType =
 const MIN_MESSAGE_CHARS = 200;
 const MAX_MESSAGE_CHARS = 2000;
 
-// ✅ realistic full-name requirement
-const MIN_NAME_WORDS = 2;
+const MIN_NAME_CHARS = 2;
 
 const ENQUIRY_TYPES_RAW: { value: EnquiryType; label: string; hint: string }[] = [
   { value: "GENERAL", label: "General enquiry", hint: "Questions about CourseDig or our services." },
   { value: "COURSE", label: "Course enquiry", hint: "Ask about a course, start dates, entry requirements, etc." },
   { value: "SCHOLARSHIP", label: "Scholarship enquiry", hint: "Ask about scholarship eligibility and process." },
-  { value: "APPLICATION_PROGRESS", label: "Application progress / update", hint: "Check status, update details, upload missing docs." },
+  {
+    value: "APPLICATION_PROGRESS",
+    label: "Application progress / update",
+    hint: "Check status, update details, upload missing docs.",
+  },
   { value: "PAYMENTS", label: "Payments / fees", hint: "Tuition fees, invoices, payment confirmation." },
   { value: "TECH_SUPPORT", label: "Technical support", hint: "Website issues or access problems." },
   { value: "PARTNERSHIP", label: "Partnership / corporate training", hint: "Business partnerships or corporate training." },
@@ -38,12 +40,6 @@ const ENQUIRY_TYPES = [...ENQUIRY_TYPES_RAW].sort((a, b) =>
 
 function normalizeSpaces(s: string) {
   return String(s || "").replace(/\s+/g, " ").trim();
-}
-
-function countWords(s: string) {
-  const v = normalizeSpaces(s);
-  if (!v) return 0;
-  return v.split(" ").filter(Boolean).length;
 }
 
 function isValidEmail(email: string) {
@@ -61,11 +57,6 @@ export default function EnquiryPage() {
   const [applicationRef, setApplicationRef] = useState("");
   const [hp, setHp] = useState("");
 
-  // Turnstile
-  const [turnstileToken, setTurnstileToken] = useState("");
-  const [captchaResetSignal, setCaptchaResetSignal] = useState(0);
-
-  // UI
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [enquiryRef, setEnquiryRef] = useState<string | null>(null);
@@ -74,63 +65,25 @@ export default function EnquiryPage() {
   const [touchedEmail, setTouchedEmail] = useState(false);
   const [touchedMessage, setTouchedMessage] = useState(false);
 
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || "";
-  const captchaEnabled = !!siteKey;
-
-  const nameWords = useMemo(() => countWords(fullName), [fullName]);
-  const nameOk = useMemo(() => nameWords >= MIN_NAME_WORDS, [nameWords]);
+  const nameOk = useMemo(() => normalizeSpaces(fullName).length >= MIN_NAME_CHARS, [fullName]);
   const emailOk = useMemo(() => isValidEmail(email), [email]);
 
   const msgLen = useMemo(() => String(message || "").length, [message]);
-  const msgOk = useMemo(
-    () => msgLen >= MIN_MESSAGE_CHARS && msgLen <= MAX_MESSAGE_CHARS,
-    [msgLen]
-  );
+  const msgOk = useMemo(() => msgLen >= MIN_MESSAGE_CHARS && msgLen <= MAX_MESSAGE_CHARS, [msgLen]);
 
-  // Only show Turnstile when key fields are already valid
-  const canShowCaptcha = useMemo(() => {
-    if (!captchaEnabled) return false;
-    return nameOk && emailOk && msgOk;
-  }, [captchaEnabled, nameOk, emailOk, msgOk]);
+  const applicationRefOk = useMemo(() => {
+    if (enquiryType !== "APPLICATION_PROGRESS") return true;
+    return normalizeSpaces(applicationRef).length >= 6;
+  }, [enquiryType, applicationRef]);
 
   const isValid = useMemo(() => {
-    if (!nameOk) return false;
-    if (!emailOk) return false;
-    if (!msgOk) return false;
-
-    if (enquiryType === "APPLICATION_PROGRESS" && normalizeSpaces(applicationRef).length < 6) {
-      return false;
-    }
-
-    if (captchaEnabled) {
-      if (!canShowCaptcha) return false;
-      if (!turnstileToken) return false;
-    }
-
-    return true;
-  }, [
-    nameOk,
-    emailOk,
-    msgOk,
-    enquiryType,
-    applicationRef,
-    captchaEnabled,
-    canShowCaptcha,
-    turnstileToken,
-  ]);
+    return nameOk && emailOk && msgOk && applicationRefOk;
+  }, [nameOk, emailOk, msgOk, applicationRefOk]);
 
   const typeHint = useMemo(
     () => ENQUIRY_TYPES.find((t) => t.value === enquiryType)?.hint || "",
     [enquiryType]
   );
-
-  // If user edits key fields after captcha passed, reset token to avoid stale “Success”
-  function resetCaptchaIfNeeded() {
-    if (!captchaEnabled) return;
-    if (!turnstileToken) return;
-    setTurnstileToken("");
-    setCaptchaResetSignal((x) => x + 1);
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -153,9 +106,8 @@ export default function EnquiryPage() {
           email: String(email).trim().toLowerCase(),
           phone,
           message,
-          applicationRef,
+          applicationRef: enquiryType === "APPLICATION_PROGRESS" ? applicationRef : "",
           hp,
-          captchaToken: turnstileToken, // ✅ align naming with your server pattern
         }),
       });
 
@@ -163,21 +115,12 @@ export default function EnquiryPage() {
 
       if (!res.ok) {
         setSubmitError(data?.message ?? "Something went wrong. Please try again.");
-        // reset captcha on failure so they can retry cleanly
-        if (captchaEnabled) {
-          setTurnstileToken("");
-          setCaptchaResetSignal((x) => x + 1);
-        }
         return;
       }
 
       setEnquiryRef(data.enquiryRef || "ENQ-RECEIVED");
     } catch {
       setSubmitError("Network error. Please try again.");
-      if (captchaEnabled) {
-        setTurnstileToken("");
-        setCaptchaResetSignal((x) => x + 1);
-      }
     } finally {
       setIsSubmitting(false);
     }
@@ -191,10 +134,7 @@ export default function EnquiryPage() {
           <p className="mt-2 text-sm text-gray-700">
             Use this form for general questions, course and scholarship enquiries, payment queries, or application progress.
             You can also browse all courses{" "}
-            <Link
-              href="/courses"
-              className="font-semibold text-[color:var(--color-brand)] hover:underline"
-            >
+            <Link href="/courses" className="font-semibold text-[color:var(--color-brand)] hover:underline">
               here
             </Link>
             .
@@ -206,9 +146,7 @@ export default function EnquiryPage() {
         <div className="mx-auto max-w-3xl px-6 py-10">
           {enquiryRef ? (
             <div className="rounded-2xl border border-green-200 bg-green-50 p-6">
-              <p className="text-base font-semibold text-gray-900">
-                Thank you — your enquiry has been received.
-              </p>
+              <p className="text-base font-semibold text-gray-900">Thank you — your enquiry has been received.</p>
               <p className="mt-2 text-sm text-gray-700">
                 Your reference: <span className="font-mono font-semibold">{enquiryRef}</span>
               </p>
@@ -235,10 +173,7 @@ export default function EnquiryPage() {
                 <label className="block text-sm font-semibold text-gray-900">Enquiry type</label>
                 <select
                   value={enquiryType}
-                  onChange={(e) => {
-                    setEnquiryType(e.target.value as EnquiryType);
-                    resetCaptchaIfNeeded();
-                  }}
+                  onChange={(e) => setEnquiryType(e.target.value as EnquiryType)}
                   className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
                 >
                   {ENQUIRY_TYPES.map((t) => (
@@ -256,20 +191,13 @@ export default function EnquiryPage() {
                   <input
                     type="text"
                     value={fullName}
-                    onChange={(e) => {
-                      setFullName(e.target.value);
-                      resetCaptchaIfNeeded();
-                    }}
+                    onChange={(e) => setFullName(e.target.value)}
                     onBlur={() => setTouchedName(true)}
                     className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
-                    placeholder="Your full name"
+                    placeholder="Your name"
                     required
                   />
-                  {touchedName && !nameOk && (
-                    <p className="mt-2 text-xs text-red-600">
-                      Please enter your full name (at least {MIN_NAME_WORDS} words).
-                    </p>
-                  )}
+                  {touchedName && !nameOk && <p className="mt-2 text-xs text-red-600">Please enter your name.</p>}
                 </div>
 
                 <div>
@@ -277,10 +205,7 @@ export default function EnquiryPage() {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      resetCaptchaIfNeeded();
-                    }}
+                    onChange={(e) => setEmail(e.target.value)}
                     onBlur={() => setTouchedEmail(true)}
                     className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
                     placeholder="you@example.com"
@@ -312,14 +237,16 @@ export default function EnquiryPage() {
                   <input
                     type="text"
                     value={applicationRef}
-                    onChange={(e) => {
-                      setApplicationRef(e.target.value);
-                      resetCaptchaIfNeeded();
-                    }}
+                    onChange={(e) => setApplicationRef(e.target.value)}
                     className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none"
                     placeholder="e.g., APP-APPLICATION-1975-20260208-0004"
                     required
                   />
+                  {!applicationRefOk && (
+                    <p className="mt-2 text-xs text-red-600">
+                      Please provide a valid application reference (at least 6 characters).
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -330,7 +257,6 @@ export default function EnquiryPage() {
                   onChange={(e) => {
                     const v = e.target.value || "";
                     setMessage(v.length > MAX_MESSAGE_CHARS ? v.slice(0, MAX_MESSAGE_CHARS) : v);
-                    resetCaptchaIfNeeded();
                   }}
                   onBlur={() => setTouchedMessage(true)}
                   className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
@@ -359,9 +285,8 @@ export default function EnquiryPage() {
                 )}
               </div>
 
-              {/* Honeypot */}
-              <div className="hidden">
-                <label className="block text-sm font-semibold text-gray-900">Do not fill</label>
+              <div className="hidden" aria-hidden="true">
+                <label className="block text-sm font-semibold text-gray-900">Leave this empty</label>
                 <input
                   type="text"
                   value={hp}
@@ -370,33 +295,6 @@ export default function EnquiryPage() {
                   autoComplete="off"
                 />
               </div>
-
-              {/* Turnstile only when form is ready */}
-              {captchaEnabled && (
-                <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <p className="text-xs font-semibold text-gray-500">SECURITY CHECK</p>
-
-                  {!canShowCaptcha ? (
-                    <p className="mt-3 text-sm text-gray-600">
-                      Please complete the form above to enable the security check.
-                    </p>
-                  ) : (
-                    <div className="mt-3">
-                      <TurnstileWidget
-                        onToken={(t) => setTurnstileToken(t)}
-                        theme="light"
-                        resetSignal={captchaResetSignal}
-                        appearance="interaction-only"
-                        action="enquiry_submit"
-                      />
-                    </div>
-                  )}
-
-                  <p className="mt-2 text-xs text-gray-600">
-                    This helps us reduce spam and keep the service safe.
-                  </p>
-                </div>
-              )}
 
               {submitError && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">

@@ -6,12 +6,10 @@ type TurnstileResult =
 
 function firstIp(ipHeader?: string | null) {
   if (!ipHeader) return null;
-  // x-forwarded-for can be "client, proxy1, proxy2"
   return ipHeader.split(",")[0]?.trim() || null;
 }
 
 function looksLikeIp(v: string) {
-  // simple check for IPv4 / IPv6-ish strings
   return /^[0-9a-fA-F:.]+$/.test(v);
 }
 
@@ -20,8 +18,6 @@ function normaliseHost(host: string) {
 }
 
 function parseAllowedHostnames() {
-  // Optional: set this to tighten hostname checks
-  // e.g. TURNSTILE_ALLOWED_HOSTNAMES=coursedig.com,www.coursedig.com
   const raw = (process.env.TURNSTILE_ALLOWED_HOSTNAMES || "").trim();
   if (!raw) return null;
 
@@ -34,19 +30,17 @@ function parseAllowedHostnames() {
 }
 
 function messageFromCodes(codes: string[]) {
-  // Cloudflare Turnstile error codes (common)
-  if (codes.includes("missing-input-response")) return "Captcha is required.";
-  if (codes.includes("invalid-input-response")) return "Captcha verification failed. Please try again.";
-  if (codes.includes("timeout-or-duplicate")) return "Captcha expired. Please try again.";
-  if (codes.includes("bad-request")) return "Captcha verification could not be completed. Please try again.";
+  if (codes.includes("missing-input-response")) return "Verification is required.";
+  if (codes.includes("invalid-input-response")) return "Verification failed. Please try again.";
+  if (codes.includes("timeout-or-duplicate")) return "Verification expired. Please try again.";
+  if (codes.includes("bad-request")) return "Verification could not be completed. Please try again.";
 
-  // Misconfig
-  if (codes.includes("missing-input-secret")) return "Captcha is misconfigured (missing secret key).";
-  if (codes.includes("invalid-input-secret")) return "Captcha is misconfigured (invalid secret key).";
+  if (codes.includes("missing-input-secret")) return "Verification is not configured.";
+  if (codes.includes("invalid-input-secret")) return "Verification is not configured.";
   if (codes.includes("invalid-domain"))
-    return "Captcha domain is not allowed. Add this domain in Cloudflare Turnstile settings.";
+    return "Verification domain is not allowed.";
 
-  return "Captcha verification failed. Please try again.";
+  return "Verification failed. Please try again.";
 }
 
 export async function verifyTurnstile(
@@ -56,16 +50,12 @@ export async function verifyTurnstile(
   const secret = (process.env.TURNSTILE_SECRET_KEY || "").trim();
   const isProd = process.env.NODE_ENV === "production";
 
-  /**
-   * ✅ Behaviour:
-   * - In DEV: if secret is missing, bypass (convenience).
-   * - In PROD: if secret is missing, DO NOT bypass (fail loudly).
-   */
+  // If not configured: bypass in non-prod; fail in prod (but with neutral wording)
   if (!secret) {
     if (isProd) {
       return {
         ok: false,
-        message: "Captcha is not configured. Please try again later.",
+        message: "Verification is not configured. Please try again later.",
         codes: ["missing-input-secret"],
       };
     }
@@ -74,7 +64,7 @@ export async function verifyTurnstile(
 
   const cleanToken = (token || "").trim();
   if (!cleanToken) {
-    return { ok: false, message: "Captcha is required.", codes: ["missing-input-response"] };
+    return { ok: false, message: "Verification is required.", codes: ["missing-input-response"] };
   }
 
   const form = new FormData();
@@ -88,7 +78,6 @@ export async function verifyTurnstile(
 
   let data: any = null;
 
-  // Small timeout so your API doesn’t hang if CF has a hiccup
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 7000);
 
@@ -100,10 +89,10 @@ export async function verifyTurnstile(
     });
 
     data = await res.json().catch(() => null);
-  } catch (err) {
+  } catch {
     return {
       ok: false,
-      message: "Captcha verification could not be completed. Please try again.",
+      message: "Verification could not be completed. Please try again.",
       codes: ["network_error"],
     };
   } finally {
@@ -115,18 +104,13 @@ export async function verifyTurnstile(
     return { ok: false, message: messageFromCodes(codes), codes };
   }
 
-  /**
-   * Optional hardening: verify hostname
-   * Turnstile includes `hostname` on success.
-   */
   const allowed = parseAllowedHostnames();
   const hostname = typeof data?.hostname === "string" ? normaliseHost(data.hostname) : null;
 
   if (allowed && hostname && !allowed.includes(hostname)) {
     return {
       ok: false,
-      message:
-        "Captcha domain is not allowed. Add this domain in Cloudflare Turnstile settings.",
+      message: "Verification domain is not allowed.",
       codes: ["invalid-domain"],
     };
   }
