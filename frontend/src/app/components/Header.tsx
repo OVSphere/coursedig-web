@@ -1,3 +1,4 @@
+//frontend\src\app\components\Header.tsx
 "use client";
 
 import Link from "next/link";
@@ -129,8 +130,25 @@ export default function Header() {
 
   const activeHref = useMemo(() => pathname ?? "/", [pathname]);
 
-  const telHref = "tel:01613882338";
-  const whatsappHref = "https://wa.me/447778208546";
+  const telHref = "tel:+441613882338";
+
+  const whatsappPhone = "447778208546";
+
+  const whatsappHref = useMemo(() => {
+    const baseText = "Hi CourseDig — I need support.";
+    const url =
+      typeof window !== "undefined" && window.location?.href ? window.location.href : "";
+    const text = url ? `${baseText}\n\nI’m currently viewing: ${url}` : baseText;
+
+    return `https://api.whatsapp.com/send?phone=${whatsappPhone}&text=${encodeURIComponent(text)}`;
+  }, []);
+
+  const openWhatsApp = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+
+    const w = window.open(whatsappHref, "_blank", "noopener,noreferrer");
+    if (!w) window.location.href = whatsappHref;
+  };
 
   async function handleLogout() {
     try {
@@ -147,14 +165,12 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b bg-white">
-      {/* Top bar */}
       <div className="border-b border-red-700/30 bg-[color:var(--color-brand)] text-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-2">
-          {/* Left: CTAs */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            {/* WhatsApp (green branded) */}
             <a
               href={whatsappHref}
+              onClick={openWhatsApp}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 font-semibold text-[#25D366] shadow-sm hover:bg-white/95"
@@ -173,7 +189,6 @@ export default function Header() {
 
             <span className="hidden text-white/70 md:inline">•</span>
 
-            {/* Call CTA (tel link) */}
             <a
               href={telHref}
               className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 font-semibold text-[color:var(--color-brand)] shadow-sm hover:bg-white/95"
@@ -186,7 +201,6 @@ export default function Header() {
             </a>
           </div>
 
-          {/* Right: Social icons (brand colours) */}
           <div className="flex items-center gap-2">
             <a
               href="https://www.facebook.com/yourcoursedig/"
@@ -224,10 +238,8 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Main header */}
       <div className="mx-auto max-w-7xl bg-white px-6">
         <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
           <Link
             href="/"
             className="flex items-center gap-3 rounded outline-none focus:ring-2 focus:ring-[color:var(--color-brand-soft)]"
@@ -248,7 +260,6 @@ export default function Header() {
             </span>
           </Link>
 
-          {/* Desktop nav */}
           <nav className="hidden items-center gap-7 md:flex">
             {NAV.map((item) => {
               const active =
@@ -325,7 +336,6 @@ export default function Header() {
             </Link>
           </nav>
 
-          {/* Mobile toggle */}
           <button
             type="button"
             className="md:hidden rounded-md border border-gray-300 p-2 text-gray-900 hover:bg-gray-50"
@@ -340,7 +350,6 @@ export default function Header() {
           </button>
         </div>
 
-        {/* Mobile nav */}
         {mobileOpen && (
           <div className="md:hidden pb-4">
             <div className="grid gap-2 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
@@ -405,15 +414,16 @@ export default function Header() {
                 Apply Now
               </Link>
 
-              {/* Mobile quick contact shortcuts */}
               <a
                 href={whatsappHref}
+                onClick={openWhatsApp}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-center text-sm font-semibold text-[#25D366] hover:bg-gray-50"
               >
                 Chat on WhatsApp
               </a>
+
               <a
                 href={telHref}
                 className="rounded-md border border-gray-200 bg-white px-3 py-2 text-center text-sm font-semibold text-[color:var(--color-brand)] hover:bg-gray-50"

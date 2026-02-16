@@ -1,15 +1,31 @@
 // frontend/src/app/components/Footer.tsx
+"use client";
+
 import Link from "next/link";
+import React, { useMemo } from "react";
 
 export default function Footer() {
-  const whatsappNumber = "+447778208546";
-  const whatsappHref = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
-    "Hi CourseDig — I’d like guidance on the best course pathway for me."
-  )}`;
+  const whatsappPhone = "447778208546";
+
+  const whatsappHref = useMemo(() => {
+    const baseText = "Hi CourseDig — I’d like guidance on the best course pathway for me.";
+    const url =
+      typeof window !== "undefined" && window.location?.href ? window.location.href : "";
+
+    const text = url ? `${baseText}\n\nI’m currently viewing: ${url}` : baseText;
+
+    return `https://api.whatsapp.com/send?phone=${whatsappPhone}&text=${encodeURIComponent(text)}`;
+  }, []);
+
+  const openWhatsApp = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+
+    const w = window.open(whatsappHref, "_blank", "noopener,noreferrer");
+    if (!w) window.location.href = whatsappHref;
+  };
 
   return (
     <footer className="border-t-4 border-[color:var(--color-brand)] bg-[#FFF5F5]">
-      {/* ✅ Contact CTA strip (above the main footer) */}
       <div className="bg-[color:var(--color-brand-soft)]">
         <div className="mx-auto max-w-7xl px-6 py-10">
           <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm md:p-10">
@@ -27,6 +43,7 @@ export default function Footer() {
               <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                 <a
                   href={whatsappHref}
+                  onClick={openWhatsApp}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center justify-center rounded-md bg-[color:var(--color-brand)] px-6 py-3 text-sm font-semibold text-white hover:bg-[color:var(--color-brand-dark)]"
@@ -49,10 +66,8 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* Main footer */}
       <div className="mx-auto max-w-7xl px-6 py-16">
         <div className="grid gap-12 md:grid-cols-4">
-          {/* Brand */}
           <div>
             <h3 className="text-lg font-bold text-gray-900">
               <Link href="/" className="hover:opacity-80">
@@ -65,7 +80,6 @@ export default function Footer() {
             </p>
           </div>
 
-          {/* Quick Links */}
           <div>
             <h4 className="text-sm font-semibold text-gray-900">Quick links</h4>
             <ul className="mt-4 space-y-2 text-sm text-gray-700">
@@ -104,7 +118,6 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Company */}
           <div>
             <h4 className="text-sm font-semibold text-gray-900">Company</h4>
             <ul className="mt-4 space-y-2 text-sm text-gray-700">
@@ -131,7 +144,6 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* CTA */}
           <div>
             <h4 className="text-sm font-semibold text-gray-900">Get guidance</h4>
 
@@ -142,6 +154,7 @@ export default function Footer() {
             <div className="mt-5 flex flex-col gap-2">
               <a
                 href={whatsappHref}
+                onClick={openWhatsApp}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center justify-center rounded-md bg-[color:var(--color-brand)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
@@ -160,7 +173,6 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* Bottom strip */}
       <div className="border-t border-red-700/30 bg-[color:var(--color-brand)]">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex flex-col gap-2 text-xs text-white/90 md:flex-row md:items-center md:justify-between">

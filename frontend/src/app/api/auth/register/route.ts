@@ -1,3 +1,4 @@
+//frontend/src/app/api/auth/register/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
@@ -23,7 +24,10 @@ function parseDob(dateStr: string): Date | null {
   if (Number.isNaN(d.getTime())) return null;
 
   const today = new Date();
-  const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const todayUTC = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  );
+
   if (d.getTime() >= todayUTC.getTime()) return null;
 
   return d;
@@ -87,6 +91,10 @@ function buildVerifyEmailHtml(params: { firstName?: string; verifyLink: string }
   `.trim();
 }
 
+function minutesFromEnv(v: number) {
+  return Number.isFinite(v) && v > 0 ? v : 10;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -130,7 +138,11 @@ export async function POST(req: Request) {
     });
 
     if (exists) {
-      return NextResponse.json({ message: "Email already registered. Please login." }, { status: 400 });
+      // ✅ better status for "already exists"
+      return NextResponse.json(
+        { message: "Email already registered. Please login." },
+        { status: 409 }
+      );
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -157,7 +169,7 @@ export async function POST(req: Request) {
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = sha256Hex(rawToken);
 
-    const minutes = Number.isFinite(VERIFY_TOKEN_TTL_MINUTES) ? VERIFY_TOKEN_TTL_MINUTES : 10;
+    const minutes = minutesFromEnv(VERIFY_TOKEN_TTL_MINUTES);
     const expiresAt = new Date(Date.now() + minutes * 60_000);
 
     await prisma.emailVerificationToken.create({
@@ -173,37 +185,43 @@ export async function POST(req: Request) {
 
     const isProd = process.env.NODE_ENV === "production";
 
+    // ✅ Non-prod: always print the link to console for easy testing
     if (!isProd) {
       console.log("DEV EMAIL (verification link):", verifyLink);
     } else {
+      // ✅ Prod: DO NOT block registration if email service isn’t configured
       if (!emailConfigured()) {
-        await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } }).catch(() => {});
-        await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
-        return NextResponse.json(
-          { message: "Email service is not configured. Please try again later." },
-          { status: 500 }
-        );
+        console.warn("REGISTER_EMAIL_NOT_CONFIGURED: verification email not sent", {
+          email,
+          userId: user.id,
+        });
+      } else {
+        try {
+          await sendEmail({
+            to: email,
+            subject: "Verify your CourseDig email",
+            html: buildVerifyEmailHtml({ firstName, verifyLink }),
+            text: `Verify your email: ${verifyLink}`,
+          });
+        } catch (e: any) {
+          // ✅ Do not fail registration if email send fails
+          console.error("REGISTER_EMAIL_SEND_FAILED:", e?.name, e?.message || e);
+        }
       }
-
-      await sendEmail({
-        to: email,
-        subject: "Verify your CourseDig email",
-        html: buildVerifyEmailHtml({ firstName, verifyLink }),
-        text: `Verify your email: ${verifyLink}`,
-      });
     }
 
     return NextResponse.json(
       {
-        message: "Account created. Please check your email to verify your address before applying.",
+        message:
+          "Account created. Please check your email to verify your address before applying. If you don’t receive it, use ‘Resend verification’.",
         ...(process.env.NODE_ENV !== "production"
           ? { devVerifyLink: verifyLink, devVerifyUrl: verifyLink }
           : {}),
       },
       { status: 200 }
     );
-  } catch (e) {
-    console.error("REGISTER_ERROR:", e);
+  } catch (e: any) {
+    console.error("REGISTER_ERROR:", e?.name, e?.message || e);
     return NextResponse.json({ message: "Registration failed." }, { status: 500 });
   }
 }
