@@ -25,10 +25,6 @@ applications:
             - printf "SESSION_TTL_DAYS=%s\n" "$SESSION_TTL_DAYS" >> .env.production
             - printf "ADMIN_KEY=%s\n" "$ADMIN_KEY" >> .env.production
 
-            # --- Cloudflare Turnstile (needed at runtime for API routes) ---
-            - printf "NEXT_PUBLIC_TURNSTILE_SITE_KEY=%s\n" "$NEXT_PUBLIC_TURNSTILE_SITE_KEY" >> .env.production
-            - printf "TURNSTILE_SECRET_KEY=%s\n" "$TURNSTILE_SECRET_KEY" >> .env.production
-
             # --- S3 uploads (runtime required for applications/scholarships uploads) ---
             - printf "S3_BUCKET_NAME=%s\n" "$S3_BUCKET_NAME" >> .env.production
             - printf "S3_UPLOAD_PREFIX=%s\n" "$S3_UPLOAD_PREFIX" >> .env.production
