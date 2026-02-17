@@ -26,6 +26,28 @@ function getDefaultFromEmail() {
   );
 }
 
+/**
+ * ✅ Pick "from" address by role.
+ * Used by routes like enquiries/applications/newsletter without hardcoding.
+ */
+export function getRoleFromEmail(role?: string) {
+  const r = String(role || "").trim().toLowerCase();
+
+  const map: Record<string, string> = {
+    auth: env("AUTH_FROM_EMAIL"),
+    admissions: env("ADMISSIONS_FROM_EMAIL"),
+    contact: env("CONTACT_FROM_EMAIL"),
+    newsletter: env("NEWSLETTER_FROM_EMAIL"),
+  };
+
+  // Allow a few common aliases (in case you used different words)
+  if (r === "enquiry" || r === "enquiries" || r === "support") return map.contact || getDefaultFromEmail();
+  if (r === "application" || r === "applications") return map.admissions || getDefaultFromEmail();
+  if (r === "verify" || r === "verification" || r === "password" || r === "reset") return map.auth || getDefaultFromEmail();
+
+  return map[r] || getDefaultFromEmail();
+}
+
 export function emailConfigured() {
   const host = env("SMTP_HOST");
   const user = env("SMTP_USER");
@@ -73,8 +95,8 @@ export async function sendEmail(opts: {
   subject: string;
   html: string;
   text?: string;
-  from?: string;      // optional override
-  replyTo?: string;   // ✅ allow reply-to (needed by enquiries)
+  from?: string; // optional override
+  replyTo?: string; // optional reply-to
 }) {
   const from = (opts.from ?? "").trim() || getDefaultFromEmail();
   const transporter = getTransport();
@@ -91,7 +113,6 @@ export async function sendEmail(opts: {
     subject: opts.subject,
     text: opts.text,
     html: opts.html,
-
     ...(replyTo ? { replyTo } : {}),
   });
 }
