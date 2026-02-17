@@ -1,8 +1,11 @@
 // src/app/api/applications/presign/route.ts
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { s3 } from "@/lib/s3";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  PutObjectCommand,
+  S3Client,
+  type PutObjectCommandInput,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "crypto";
 import { UPLOAD_LIMITS, UPLOAD_LIMIT_BYTES } from "@/lib/uploadLimits";
@@ -40,8 +43,42 @@ function sanitizeFileName(name: string) {
     .slice(0, 80);
 }
 
-function jsonError(message: string, status = 400, extra?: Record<string, unknown>) {
+function jsonError(
+  message: string,
+  status = 400,
+  extra?: Record<string, unknown>
+) {
   return NextResponse.json({ message, ...(extra ?? {}) }, { status });
+}
+
+function getS3Client() {
+  const region =
+    process.env.AWS_REGION ||
+    process.env.AWS_DEFAULT_REGION ||
+    "eu-west-2";
+
+  /**
+   * ✅ CRITICAL FIX:
+   * Disable checksum signing for browser presigned PUT uploads.
+   * Otherwise, SDK adds `x-amz-sdk-checksum-algorithm=CRC32` to the presigned URL
+   * and S3 rejects the PUT unless the browser also sends checksum headers.
+   */
+  return new S3Client({
+    region,
+    requestChecksumCalculation: "NEVER",
+    responseChecksumValidation: "NEVER",
+
+    // Credentials are normally available in Amplify SSR runtime (IAM role).
+    // If you *do* provide static keys in env, SDK will use them.
+    credentials:
+      process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+        ? {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+            sessionToken: process.env.AWS_SESSION_TOKEN,
+          }
+        : undefined,
+  });
 }
 
 export const dynamic = "force-dynamic";
@@ -62,34 +99,31 @@ export async function POST(req: Request) {
       }));
     }
 
-    if (!files.length) {
-      return jsonError("No files provided.", 400);
-    }
-
-    if (files.length > MAX_FILES) {
+    if (!files.length) return jsonError("No files provided.", 400);
+    if (files.length > MAX_FILES)
       return jsonError(`Maximum ${MAX_FILES} files allowed.`, 400);
-    }
 
     let totalBytes = 0;
 
     for (const f of files) {
-      const fileName = f.fileName;
-      const mimeType = f.mimeType;
-      const sizeBytes = f.sizeBytes;
-
-      if (!fileName || !mimeType || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+      if (
+        !f.fileName ||
+        !f.mimeType ||
+        !Number.isFinite(f.sizeBytes) ||
+        f.sizeBytes <= 0
+      ) {
         return jsonError("Invalid file metadata.", 400);
       }
 
-      if (!ALLOWED.has(mimeType)) {
+      if (!ALLOWED.has(f.mimeType)) {
         return jsonError("Only PDF and image files are allowed.", 400);
       }
 
-      if (sizeBytes > MAX_PER_FILE_BYTES) {
+      if (f.sizeBytes > MAX_PER_FILE_BYTES) {
         return jsonError(`Each file must be <= ${MAX_PER_FILE_MB}MB.`, 400);
       }
 
-      totalBytes += sizeBytes;
+      totalBytes += f.sizeBytes;
       if (totalBytes > MAX_TOTAL_BYTES) {
         return jsonError(`Total upload must be <= ${MAX_TOTAL_MB}MB.`, 400);
       }
@@ -98,11 +132,15 @@ export async function POST(req: Request) {
     const bucket = process.env.S3_BUCKET_NAME;
     if (!bucket) return jsonError("S3_BUCKET_NAME is not set.", 500);
 
-    const prefix = (process.env.S3_UPLOAD_PREFIX || "applications").replace(/\/+$/, "");
+    const prefix = (process.env.S3_UPLOAD_PREFIX || "applications").replace(
+      /\/+$/,
+      ""
+    );
 
     // Optional: allow local dev without AWS by bypassing presign (keeps UI moving)
-    // Set BYPASS_S3_PRESIGN=true in .env.local if you want to skip S3 locally.
-    const bypass = String(process.env.BYPASS_S3_PRESIGN ?? "").toLowerCase() === "true";
+    const bypass =
+      String(process.env.BYPASS_S3_PRESIGN ?? "").toLowerCase() === "true";
+
     if (bypass) {
       const uploads = files.map((f) => {
         const safeName = sanitizeFileName(f.fileName);
@@ -115,7 +153,6 @@ export async function POST(req: Request) {
           sizeBytes: f.sizeBytes,
           key,
           url: "BYPASS",
-          // backward-compatible
           s3Key: key,
           uploadUrl: "BYPASS",
         };
@@ -124,32 +161,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ uploads, bypass: true }, { status: 200 });
     }
 
-    /**
-     * ✅ IMPORTANT FIX (CourseDig):
-     * Do NOT include ContentDisposition (or checksum headers) in the PutObjectCommand for presign.
-     * If you include it, AWS signs that header; the browser PUT must then send the same header,
-     * which it typically does not — causing 403 and the browser shows "CORS Missing Allow Origin".
-     *
-     * We will set "download filename" later at download time (GET presign) using
-     * ResponseContentDisposition.
-     */
+    const s3 = getS3Client();
+
     const uploads = await Promise.all(
       files.map(async (f) => {
         const safeName = sanitizeFileName(f.fileName);
         const id = crypto.randomUUID();
         const key = `${prefix}/${user.id}/${Date.now()}-${id}-${safeName}`;
 
-        const cmd = new PutObjectCommand({
+        // IMPORTANT: keep this minimal for browser PUT
+        const input: PutObjectCommandInput = {
           Bucket: bucket,
           Key: key,
           ContentType: f.mimeType,
-          // ❌ DO NOT add ContentDisposition here
-          // ❌ DO NOT add ChecksumAlgorithm here
-          // ❌ DO NOT add ACL here
-        });
+          // ❌ DO NOT set ACL
+          // ❌ DO NOT set ContentDisposition
+          // ❌ DO NOT set ChecksumAlgorithm
+        };
 
-        // ✅ keep short-lived
-        const url = await getSignedUrl(s3, cmd, { expiresIn: 60 * 5 }); // 5 mins
+        const cmd = new PutObjectCommand(input);
+
+        // Short-lived presign
+        const url = await getSignedUrl(s3, cmd, { expiresIn: 60 * 5 });
 
         return {
           fileName: f.fileName,
@@ -157,9 +190,8 @@ export async function POST(req: Request) {
           sizeBytes: f.sizeBytes,
           key,
           url,
-          // backward-compatible
-          s3Key: key,
-          uploadUrl: url,
+          s3Key: key, // backward-compatible
+          uploadUrl: url, // backward-compatible
         };
       })
     );
@@ -167,6 +199,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ uploads }, { status: 200 });
   } catch (err) {
     console.error("PRESIGN_ERROR:", err);
-    return NextResponse.json({ message: "Failed to create upload URLs." }, { status: 500 });
+    return NextResponse.json(
+      { message: "Failed to create upload URLs." },
+      { status: 500 }
+    );
   }
 }
