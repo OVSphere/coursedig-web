@@ -37,46 +37,47 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Enter a valid email." }, { status: 400 });
     }
 
-    try {
-      await prisma.newsletterSubscriber.create({
-        data: { email, isActive: true },
-        select: { id: true },
-      });
+    // ✅ Upsert so:
+    // - first time: creates row
+    // - already exists: re-activates subscription cleanly
+    const sub = await prisma.newsletterSubscriber.upsert({
+      where: { email },
+      update: { isActive: true },
+      create: { email, isActive: true },
+      select: { id: true, isActive: true },
+    });
 
-      // Best-effort confirmation email (do not block success)
-      (async () => {
-        try {
-          const isProd = process.env.NODE_ENV === "production";
-          if (!isProd) {
-            console.log("DEV NEWSLETTER SUBSCRIBE: confirmation email would send to:", email);
-            return;
-          }
+    // ✅ Best-effort confirmation email (never blocks success)
+    (async () => {
+      try {
+        const isProd = process.env.NODE_ENV === "production";
 
-          if (!emailConfigured()) return;
-
-          await sendEmail({
-            to: email,
-            subject: "CourseDig subscription confirmed",
-            html: buildNewsletterConfirmHtml({ email }),
-            text: "You’re subscribed to CourseDig updates.",
-          });
-        } catch (sendErr) {
-          console.error("NEWSLETTER_CONFIRM_EMAIL_SEND_ERROR:", sendErr);
+        if (!isProd) {
+          console.log("DEV NEWSLETTER SUBSCRIBE: confirmation email would send to:", email);
+          return;
         }
-      })();
 
-      return NextResponse.json({ status: "subscribed" }, { status: 200 });
-    } catch (e: any) {
-      // Unique constraint (already subscribed)
-      if (e?.code === "P2002") {
-        return NextResponse.json({ status: "already_subscribed" }, { status: 409 });
+        if (!emailConfigured()) return;
+
+        await sendEmail({
+          to: email,
+          subject: "CourseDig subscription confirmed",
+          html: buildNewsletterConfirmHtml({ email }),
+          text: "You’re subscribed to CourseDig updates.",
+        });
+      } catch (sendErr) {
+        console.error("NEWSLETTER_CONFIRM_EMAIL_SEND_ERROR:", sendErr);
       }
+    })();
 
-      console.error("NEWSLETTER_SUBSCRIBE_DB_ERROR:", e);
-      return NextResponse.json({ message: "Subscribe failed. Please try again." }, { status: 500 });
-    }
-  } catch (e) {
-    console.error("NEWSLETTER_SUBSCRIBE_ERROR:", e);
-    return NextResponse.json({ message: "Subscribe failed." }, { status: 500 });
+    // ✅ Always 200 so UI can just show success
+    // Provide status for analytics/UI if you want
+    return NextResponse.json(
+      { status: sub.isActive ? "subscribed" : "subscribed" },
+      { status: 200 }
+    );
+  } catch (e: any) {
+    console.error("NEWSLETTER_SUBSCRIBE_ERROR:", e?.name, e?.message || e);
+    return NextResponse.json({ message: "Subscribe failed. Please try again." }, { status: 500 });
   }
 }

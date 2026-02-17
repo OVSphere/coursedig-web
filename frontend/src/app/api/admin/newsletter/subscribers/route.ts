@@ -1,3 +1,4 @@
+//frontend\src\app\api\admin\newsletter\subscribers\route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
@@ -74,11 +75,7 @@ export async function DELETE(req: Request) {
     );
   }
 
-  const where = all
-    ? {}
-    : inactiveOnly
-      ? { isActive: false }
-      : { id: { in: ids } };
+  const where = all ? {} : inactiveOnly ? { isActive: false } : { id: { in: ids } };
 
   const result = await prisma.newsletterSubscriber.deleteMany({ where });
   return NextResponse.json({ deleted: result.count }, { status: 200 });
@@ -111,7 +108,10 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ id: created.id }, { status: 200 });
   } catch (e: any) {
-    // email unique constraint
-    return NextResponse.json({ message: "Email already exists." }, { status: 409 });
+    if (e?.code === "P2002") {
+      return NextResponse.json({ message: "Email already exists." }, { status: 409 });
+    }
+    console.error("NEWSLETTER_SUBSCRIBERS_CREATE_ERROR:", e);
+    return NextResponse.json({ message: "Create failed. Please try again." }, { status: 500 });
   }
 }

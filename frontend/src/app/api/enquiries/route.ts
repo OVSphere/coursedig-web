@@ -1,15 +1,7 @@
 // frontend/src/app/api/enquiries/route.ts
 import { NextResponse } from "next/server";
-import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import { prisma } from "@/lib/prisma";
-
-const AWS_REGION =
-  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "eu-west-2";
-
-const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL;
-const SES_ADMIN_EMAIL = process.env.SES_ADMIN_EMAIL;
-
-const ses = new SESClient({ region: AWS_REGION });
+import { emailConfigured, getRoleFromEmail, sendEmail } from "@/lib/mailer";
 
 function currentYear(date = new Date()) {
   return date.getFullYear();
@@ -56,29 +48,6 @@ function buildStructuredMessage(params: {
   return lines.join("\n");
 }
 
-async function sendEmail(params: {
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-}) {
-  if (!SES_FROM_EMAIL) throw new Error("SES_FROM_EMAIL is not set");
-
-  const cmd = new SendEmailCommand({
-    Source: SES_FROM_EMAIL,
-    Destination: { ToAddresses: [params.to] },
-    Message: {
-      Subject: { Data: params.subject, Charset: "UTF-8" },
-      Body: {
-        Html: { Data: params.html, Charset: "UTF-8" },
-        Text: { Data: params.text, Charset: "UTF-8" },
-      },
-    },
-  });
-
-  await ses.send(cmd);
-}
-
 function getClientIp(req: Request) {
   const cf = req.headers.get("cf-connecting-ip");
   if (cf) return cf;
@@ -120,7 +89,6 @@ export async function POST(req: Request) {
     const bestContactMethod = String(body.bestContactMethod ?? "").trim();
 
     const hp = String(body.hp ?? "").trim();
-
     if (hp) {
       return NextResponse.json({ message: "Request blocked." }, { status: 400 });
     }
@@ -231,7 +199,7 @@ export async function POST(req: Request) {
         <p><strong>Your reference:</strong> ${enquiryRef}</p>
         <p>We will respond by email as soon as possible.</p>
       </div>
-    `;
+    `.trim();
 
     const adminText =
       `New enquiry received\n\n` +
@@ -259,29 +227,55 @@ export async function POST(req: Request) {
         <p><strong>Message:</strong></p>
         <pre style="background:#f5f5f5;padding:12px;border-radius:6px;white-space:pre-wrap;">${enquiry.message}</pre>
       </div>
-    `;
+    `.trim();
 
-    const isProd = process.env.NODE_ENV === "production";
-    const canSend = Boolean(SES_FROM_EMAIL && SES_ADMIN_EMAIL);
+    /**
+     * Admin inbox:
+     * - Keep compatibility: SES_ADMIN_EMAIL (existing)
+     * - Allow new naming: CONTACT_ADMIN_EMAIL
+     * - If neither set, we skip admin notification safely.
+     */
+    const adminTo =
+      (process.env.CONTACT_ADMIN_EMAIL || process.env.SES_ADMIN_EMAIL || "").trim();
 
-    if (canSend) {
-      await sendEmail({
-        to: enquiry.email,
-        subject: userSubject,
-        html: userHtml,
-        text: userText,
-      });
+    const canSend = emailConfigured();
 
-      await sendEmail({
-        to: SES_ADMIN_EMAIL as string,
-        subject: adminSubject,
-        html: adminHtml,
-        text: adminText,
-      });
+    if (!canSend) {
+      console.warn("ENQUIRY_EMAIL_NOT_CONFIGURED: skipping email send");
     } else {
-      const msg = "SES_FROM_EMAIL / SES_ADMIN_EMAIL not set; skipping email send.";
-      if (isProd) console.error(msg);
-      else console.warn(msg);
+      const fromContact = getRoleFromEmail("contact") || undefined;
+
+      // User confirmation (from contact@)
+      try {
+        await sendEmail({
+          to: enquiry.email,
+          subject: userSubject,
+          html: userHtml,
+          text: userText,
+          from: fromContact,
+          replyTo: fromContact, // if user replies, it goes to contact@
+        });
+      } catch (e: any) {
+        console.error("ENQUIRY_USER_EMAIL_SEND_FAILED:", e?.name, e?.message || e);
+      }
+
+      // Admin notification (reply-to set to user so admin can reply directly)
+      if (adminTo) {
+        try {
+          await sendEmail({
+            to: adminTo,
+            subject: adminSubject,
+            html: adminHtml,
+            text: adminText,
+            from: fromContact,
+            replyTo: enquiry.email,
+          });
+        } catch (e: any) {
+          console.error("ENQUIRY_ADMIN_EMAIL_SEND_FAILED:", e?.name, e?.message || e);
+        }
+      } else {
+        console.warn("ENQUIRY_ADMIN_EMAIL_NOT_SET: skipping admin notification");
+      }
     }
 
     return NextResponse.json(
@@ -289,7 +283,7 @@ export async function POST(req: Request) {
       { status: 200 }
     );
   } catch (err: any) {
-    console.error("ENQUIRY_API_ERROR:", err?.name, err?.message);
+    console.error("ENQUIRY_API_ERROR:", err?.name, err?.message || err);
 
     return NextResponse.json(
       {

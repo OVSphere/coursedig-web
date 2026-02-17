@@ -13,11 +13,15 @@ function safeRedirect(next: unknown) {
   return n.startsWith("/") && !n.startsWith("//") ? n : "/";
 }
 
+function normaliseEmail(v: unknown) {
+  return String(v ?? "").trim().toLowerCase();
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
 
-    const email = String(body.email ?? "").toLowerCase().trim();
+    const email = normaliseEmail(body.email);
     const password = String(body.password ?? "");
     const next = safeRedirect(body.next);
 
@@ -29,6 +33,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // IMPORTANT: always lookup by normalised lowercase email
     const user = await prisma.user.findUnique({
       where: { email },
       select: {
@@ -64,16 +69,17 @@ export async function POST(req: Request) {
         success: true,
         verified,
         requiresVerification: !verified,
+        next,
       },
       { status: 200 }
     );
 
-    // Let the client know where it wanted to go
+    // Let the client know where it wanted to go (optional)
     res.headers.set("X-Redirect-To", next);
 
     return res;
-  } catch (e) {
-    console.error("LOGIN_ERROR:", e);
+  } catch (e: any) {
+    console.error("LOGIN_ERROR:", e?.name, e?.message || e);
     return NextResponse.json({ message: "Login failed" }, { status: 500 });
   }
 }

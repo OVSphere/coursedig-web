@@ -1,3 +1,4 @@
+//frontend/src/app/api/auth/resend-verification/route.ts
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
@@ -7,7 +8,9 @@ function isEmailLike(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-const VERIFY_TOKEN_TTL_MINUTES = Number(process.env.VERIFY_TOKEN_TTL_MINUTES ?? 10);
+const VERIFY_TOKEN_TTL_MINUTES = Number(
+  process.env.VERIFY_TOKEN_TTL_MINUTES ?? 10
+);
 
 function sha256Hex(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex");
@@ -58,6 +61,10 @@ function buildResendHtml(params: { verifyLink: string; firstName?: string }) {
   `.trim();
 }
 
+function minutesFromEnv(v: number) {
+  return Number.isFinite(v) && v > 0 ? v : 10;
+}
+
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
@@ -72,24 +79,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Enter a valid email." }, { status: 400 });
     }
 
-    const isProd = process.env.NODE_ENV === "production";
-    if (isProd && !emailConfigured()) {
-      return NextResponse.json(
-        { message: "Email service is not configured. Please try again later." },
-        { status: 500 }
-      );
-    }
-
     const user = await prisma.user.findUnique({
       where: { email },
       select: { id: true, emailVerifiedAt: true, firstName: true },
     });
 
+    // Neutral response for: no user OR already verified
     if (!user || user.emailVerifiedAt) {
       return NextResponse.json({ message: neutralOk }, { status: 200 });
     }
 
-    // Optional: clear old tokens for this user (keeps DB tidy)
+    // Clear old tokens for this user (keeps DB tidy)
     await prisma.emailVerificationToken.deleteMany({
       where: { userId: user.id },
     });
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = sha256Hex(rawToken);
 
-    const minutes = Number.isFinite(VERIFY_TOKEN_TTL_MINUTES) ? VERIFY_TOKEN_TTL_MINUTES : 10;
+    const minutes = minutesFromEnv(VERIFY_TOKEN_TTL_MINUTES);
     const expiresAt = new Date(Date.now() + minutes * 60_000);
 
     await prisma.emailVerificationToken.create({
@@ -111,21 +111,42 @@ export async function POST(req: Request) {
     const baseUrl = getBaseUrl(req);
     const verifyLink = `${baseUrl}/verify-email?token=${encodeURIComponent(rawToken)}`;
 
+    const isProd = process.env.NODE_ENV === "production";
+
+    // Non-prod: return link for easy testing
     if (!isProd) {
       console.log("DEV RESEND VERIFY LINK:", verifyLink);
-      return NextResponse.json({ message: neutralOk, devVerifyLink: verifyLink }, { status: 200 });
+      return NextResponse.json(
+        { message: neutralOk, devVerifyLink: verifyLink, devVerifyUrl: verifyLink },
+        { status: 200 }
+      );
     }
 
-    await sendEmail({
-      to: email,
-      subject: "Your CourseDig verification link",
-      html: buildResendHtml({ verifyLink, firstName: user.firstName || undefined }),
-      text: `Verify your email: ${verifyLink}`,
-    });
+    // Prod: never block the user if SMTP isn't configured
+    if (!emailConfigured()) {
+      console.warn("RESEND_VERIFY_EMAIL_NOT_CONFIGURED: skipping email send", {
+        email,
+        userId: user.id,
+      });
+      return NextResponse.json({ message: neutralOk }, { status: 200 });
+    }
+
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Your CourseDig verification link",
+        html: buildResendHtml({ verifyLink, firstName: user.firstName || undefined }),
+        text: `Verify your email: ${verifyLink}`,
+      });
+    } catch (e: any) {
+      // Do not fail flow if email sending fails
+      console.error("RESEND_VERIFY_EMAIL_SEND_FAILED:", e?.name, e?.message || e);
+    }
 
     return NextResponse.json({ message: neutralOk }, { status: 200 });
-  } catch (e) {
-    console.error("RESEND_VERIFY_ERROR:", e);
+  } catch (e: any) {
+    console.error("RESEND_VERIFY_ERROR:", e?.name, e?.message || e);
+    // Always return neutral OK to avoid account enumeration
     return NextResponse.json({ message: neutralOk }, { status: 200 });
   }
 }

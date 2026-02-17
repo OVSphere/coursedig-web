@@ -95,6 +95,10 @@ function minutesFromEnv(v: number) {
   return Number.isFinite(v) && v > 0 ? v : 10;
 }
 
+function allowDevLinksInProd() {
+  return (process.env.ALLOW_DEV_EMAIL_LINKS || "").trim().toLowerCase() === "true";
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -138,7 +142,6 @@ export async function POST(req: Request) {
     });
 
     if (exists) {
-      // ✅ better status for "already exists"
       return NextResponse.json(
         { message: "Email already registered. Please login." },
         { status: 409 }
@@ -163,7 +166,6 @@ export async function POST(req: Request) {
       select: { id: true, email: true },
     });
 
-    // Clear any old tokens (tidy)
     await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } }).catch(() => {});
 
     const rawToken = crypto.randomBytes(32).toString("hex");
@@ -184,12 +186,11 @@ export async function POST(req: Request) {
     const verifyLink = `${baseUrl}/verify-email?token=${encodeURIComponent(rawToken)}`;
 
     const isProd = process.env.NODE_ENV === "production";
+    const includeDevLink = !isProd || allowDevLinksInProd();
 
-    // ✅ Non-prod: always print the link to console for easy testing
     if (!isProd) {
       console.log("DEV EMAIL (verification link):", verifyLink);
     } else {
-      // ✅ Prod: DO NOT block registration if email service isn’t configured
       if (!emailConfigured()) {
         console.warn("REGISTER_EMAIL_NOT_CONFIGURED: verification email not sent", {
           email,
@@ -203,9 +204,14 @@ export async function POST(req: Request) {
             html: buildVerifyEmailHtml({ firstName, verifyLink }),
             text: `Verify your email: ${verifyLink}`,
           });
+          console.log("REGISTER_EMAIL_SENT_OK:", { email, userId: user.id });
         } catch (e: any) {
-          // ✅ Do not fail registration if email send fails
-          console.error("REGISTER_EMAIL_SEND_FAILED:", e?.name, e?.message || e);
+          console.error("REGISTER_EMAIL_SEND_FAILED:", {
+            name: e?.name,
+            message: e?.message || String(e),
+            email,
+            userId: user.id,
+          });
         }
       }
     }
@@ -214,9 +220,7 @@ export async function POST(req: Request) {
       {
         message:
           "Account created. Please check your email to verify your address before applying. If you don’t receive it, use ‘Resend verification’.",
-        ...(process.env.NODE_ENV !== "production"
-          ? { devVerifyLink: verifyLink, devVerifyUrl: verifyLink }
-          : {}),
+        ...(includeDevLink ? { devVerifyLink: verifyLink, devVerifyUrl: verifyLink } : {}),
       },
       { status: 200 }
     );

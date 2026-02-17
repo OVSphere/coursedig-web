@@ -1,34 +1,22 @@
+//frontend/src/app/api/admin/newsletter/send/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+import { emailConfigured, sendEmail as sendSmtpEmail } from "@/lib/mailer";
 
-const AWS_REGION =
-  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "eu-west-2";
-
-const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL;
 const DEV_FORCE_EMAIL = process.env.DEV_FORCE_EMAIL;
 
-const ses = new SESClient({ region: AWS_REGION });
-
 async function sendEmail(to: string, subject: string, html: string, text: string) {
-  if (!SES_FROM_EMAIL) throw new Error("SES_FROM_EMAIL is not set");
   const isProd = process.env.NODE_ENV === "production";
   const finalTo = !isProd && DEV_FORCE_EMAIL ? DEV_FORCE_EMAIL : to;
 
-  const cmd = new SendEmailCommand({
-    Source: SES_FROM_EMAIL,
-    Destination: { ToAddresses: [finalTo] },
-    Message: {
-      Subject: { Data: subject, Charset: "UTF-8" },
-      Body: {
-        Html: { Data: html, Charset: "UTF-8" },
-        Text: { Data: text, Charset: "UTF-8" },
-      },
-    },
+  // Uses Hostgator SMTP via lib/mailer.ts
+  await sendSmtpEmail({
+    to: finalTo,
+    subject,
+    html,
+    text,
   });
-
-  await ses.send(cmd);
 }
 
 type Body = {
@@ -49,9 +37,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
-  if (!SES_FROM_EMAIL) {
+  // ✅ Hostgator SMTP configured check
+  if (!emailConfigured()) {
     return NextResponse.json(
-      { message: "Email service not configured (SES_FROM_EMAIL missing)." },
+      { message: "Email service not configured (SMTP settings missing)." },
       { status: 500 }
     );
   }
@@ -103,15 +92,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "No recipients found." }, { status: 400 });
   }
 
-  // Send (sequential to avoid SES throttling surprises)
+  // Send (sequential to avoid provider throttling surprises)
   let sent = 0;
+
   for (const to of recipients) {
     try {
       await sendEmail(to, subject, html, text);
       sent++;
-    } catch (e) {
-      // continue; we return counts
-      console.error("NEWSLETTER_SEND_ERROR:", to, e);
+    } catch (e: any) {
+      console.error("NEWSLETTER_SEND_ERROR:", to, e?.name, e?.message || e);
     }
   }
 

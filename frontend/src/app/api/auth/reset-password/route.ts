@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { verifyTurnstile } from "@/lib/turnstile";
 
 function sha256Hex(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex");
@@ -21,22 +20,6 @@ export async function POST(req: Request) {
 
     const token = String(body.token ?? "").trim();
     const newPassword = String(body.password ?? "");
-    const captchaToken = String(body.captchaToken ?? "");
-
-    const ipRaw =
-      req.headers.get("cf-connecting-ip") ||
-      req.headers.get("x-forwarded-for") ||
-      null;
-
-    const ip = typeof ipRaw === "string" ? ipRaw.split(",")[0].trim() : (ipRaw as any);
-
-    const captcha = await verifyTurnstile(captchaToken, ip);
-    if (!captcha.ok) {
-      return NextResponse.json(
-        { message: captcha.message || "Captcha verification failed." },
-        { status: 400 }
-      );
-    }
 
     if (!token) {
       return NextResponse.json({ message: "Missing reset token." }, { status: 400 });

@@ -2,19 +2,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+import { emailConfigured, sendEmail } from "@/lib/mailer";
 import { UPLOAD_LIMITS, UPLOAD_LIMIT_BYTES } from "@/lib/uploadLimits";
 
-const AWS_REGION =
-  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "eu-west-2";
+const DEV_FORCE_EMAIL = process.env.DEV_FORCE_EMAIL; // optional for dev testing
 
-const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL;
-const SES_ADMIN_EMAIL = process.env.SES_ADMIN_EMAIL;
+// Use role-based “from” if provided (recommended)
+const EMAIL_FROM_ADMISSIONS =
+  process.env.EMAIL_FROM_ADMISSIONS ||
+  process.env.ADMISSIONS_FROM_EMAIL ||
+  "admissions@coursedig.com";
 
-// ✅ DEV override so you can test while SES is still in sandbox
-const DEV_FORCE_EMAIL = process.env.DEV_FORCE_EMAIL; // e.g. ovsphereltd@gmail.com
-
-const ses = new SESClient({ region: AWS_REGION });
+// Admin notification mailbox
+const APPLICATIONS_ADMIN_EMAIL =
+  process.env.APPLICATIONS_ADMIN_EMAIL ||
+  process.env.SES_ADMIN_EMAIL || // keep backward compat if you already set this
+  "admissions@coursedig.com";
 
 const MAX_FILES = UPLOAD_LIMITS.MAX_FILES;
 const MAX_TOTAL_BYTES = UPLOAD_LIMIT_BYTES.MAX_TOTAL_BYTES;
@@ -39,9 +42,7 @@ function cleanSurname(s: string) {
 }
 
 // Accepts "DDMMYYYY" OR "DD/MM/YYYY" OR "DD-MM-YYYY"
-function parseDobToDate(
-  dobRaw: unknown
-): { dobDate: Date | null; yob: string | null } {
+function parseDobToDate(dobRaw: unknown): { dobDate: Date | null; yob: string | null } {
   if (!dobRaw) return { dobDate: null, yob: null };
 
   const s = String(dobRaw).trim();
@@ -67,8 +68,9 @@ function parseDobToDate(
     dobDate.getUTCFullYear() !== yyyy ||
     dobDate.getUTCMonth() !== mm - 1 ||
     dobDate.getUTCDate() !== dd
-  )
+  ) {
     return { dobDate: null, yob: null };
+  }
 
   return { dobDate, yob: String(yyyy) };
 }
@@ -81,8 +83,6 @@ async function generateAppRef(
   const dateKey = ymdKey(); // YYYYMMDD
   const surname = cleanSurname(lastName) || "SURNAME";
 
-  // ✅ Separate counters by application type
-  // e.g. 20260203-COURSE vs 20260203-SCHOLARSHIP
   const counterKey = `${dateKey}-${applicationType}`;
 
   const counter = await prisma.applicationCounter.upsert({
@@ -94,58 +94,10 @@ async function generateAppRef(
 
   const seq = String(counter.lastValue).padStart(4, "0");
 
-  // ✅ Prefix for scholarship refs
-  const prefix = applicationType === "SCHOLARSHIP" ? "SCHOLAR APP" : "APP";
+  // ✅ no spaces; consistent ref format
+  const prefix = applicationType === "SCHOLARSHIP" ? "SCHOLAR-APP" : "APP";
 
-  // e.g. "SCHOLAR-APP-OKUNS-1985-20260203-0008"
   return `${prefix}-${surname}-${yob}-${dateKey}-${seq}`;
-}
-
-// ✅ Upgraded helper:
-// - In dev: forces emails to DEV_FORCE_EMAIL (verified in SES)
-// - In dev: never throws if SES rejects (so application submission still works)
-// - In prod: normal behaviour (throws on SES failure)
-async function sendEmail(
-  to: string,
-  subject: string,
-  html: string,
-  text: string
-) {
-  if (!SES_FROM_EMAIL) throw new Error("SES_FROM_EMAIL is not set");
-
-  const isProd = process.env.NODE_ENV === "production";
-
-  const finalTo = !isProd && DEV_FORCE_EMAIL ? DEV_FORCE_EMAIL : to;
-
-  const cmd = new SendEmailCommand({
-    Source: SES_FROM_EMAIL,
-    Destination: { ToAddresses: [finalTo] },
-    Message: {
-      Subject: { Data: subject, Charset: "UTF-8" },
-      Body: {
-        Html: { Data: html, Charset: "UTF-8" },
-        Text: { Data: text, Charset: "UTF-8" },
-      },
-    },
-  });
-
-  try {
-    await ses.send(cmd);
-
-    if (!isProd && DEV_FORCE_EMAIL) {
-      console.log(`DEV_EMAIL_OVERRIDE: originally "${to}" -> sent to "${finalTo}"`);
-    }
-  } catch (err) {
-    console.error("SES_SEND_ERROR:", err);
-
-    // ✅ never block application submission if email fails in dev
-    if (!isProd) {
-      console.warn("SES failed in dev. Application saved; email skipped.");
-      return;
-    }
-
-    throw err;
-  }
 }
 
 function minLen(s: string, n: number) {
@@ -156,11 +108,47 @@ function isEmailLike(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email ?? "").trim());
 }
 
+// ✅ SMTP send helper:
+// - in dev you can force delivery to one inbox (DEV_FORCE_EMAIL)
+// - never blocks application submission if email fails
+async function sendAppEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  from?: string;
+}) {
+  const isProd = process.env.NODE_ENV === "production";
+  const finalTo = !isProd && DEV_FORCE_EMAIL ? DEV_FORCE_EMAIL : params.to;
+
+  if (!isProd && DEV_FORCE_EMAIL) {
+    console.log(`DEV_EMAIL_OVERRIDE: "${params.to}" -> "${finalTo}"`);
+  }
+
+  // If SMTP not configured, just skip (do not block submission)
+  if (!emailConfigured()) {
+    console.warn("SMTP not configured; skipping email send.");
+    return;
+  }
+
+  try {
+    await sendEmail({
+      to: finalTo,
+      subject: params.subject,
+      html: params.html,
+      text: params.text,
+      from: params.from,
+    });
+  } catch (err: any) {
+    console.error("SMTP_SEND_ERROR:", err?.name, err?.message || err);
+    // Do not throw — submission must still succeed
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
-    if (!user)
-      return NextResponse.json({ message: "Unauthorised" }, { status: 401 });
+    if (!user) return NextResponse.json({ message: "Unauthorised" }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
 
@@ -266,7 +254,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // ✅ NEW: type-aware ref
     const appRef = await generateAppRef(applicationType, lastName, yob);
 
     const created = await prisma.application.create({
@@ -299,7 +286,8 @@ export async function POST(req: Request) {
       include: { attachments: true },
     });
 
-    const formLabel = applicationType === "SCHOLARSHIP" ? "Scholarship Application" : "Course Application";
+    const formLabel =
+      applicationType === "SCHOLARSHIP" ? "Scholarship Application" : "Course Application";
 
     const userSubject = `CourseDig ${formLabel} Received: ${appRef}`;
     const adminSubject = `New CourseDig ${formLabel}: ${appRef}`;
@@ -346,15 +334,22 @@ export async function POST(req: Request) {
       </div>
     `;
 
-    const canSend = Boolean(SES_FROM_EMAIL && (SES_ADMIN_EMAIL || DEV_FORCE_EMAIL));
-    if (canSend) {
-      await sendEmail(email, userSubject, userHtml, userText);
+    // ✅ Best-effort emails (never block submission)
+    await sendAppEmail({
+      to: email,
+      subject: userSubject,
+      html: userHtml,
+      text: userText,
+      from: EMAIL_FROM_ADMISSIONS,
+    });
 
-      const adminTo = SES_ADMIN_EMAIL || DEV_FORCE_EMAIL!;
-      await sendEmail(adminTo, adminSubject, adminHtml, adminText);
-    } else {
-      console.warn("SES_FROM_EMAIL missing; skipping email send.");
-    }
+    await sendAppEmail({
+      to: APPLICATIONS_ADMIN_EMAIL,
+      subject: adminSubject,
+      html: adminHtml,
+      text: adminText,
+      from: EMAIL_FROM_ADMISSIONS,
+    });
 
     return NextResponse.json(
       { appRef, message: "Thanks—your application has been received." },

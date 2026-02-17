@@ -74,6 +74,10 @@ function buildResetHtml(params: { resetLink: string; firstName?: string }) {
   `.trim();
 }
 
+function minutesFromEnv(v: number, fallback: number) {
+  return Number.isFinite(v) && v > 0 ? v : fallback;
+}
+
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
@@ -83,19 +87,10 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const email = String(body.email ?? "").trim().toLowerCase();
-
     const ip = getClientIp(req);
 
     if (!isEmailLike(email)) {
       return NextResponse.json({ message: "Enter a valid email." }, { status: 400 });
-    }
-
-    const isProd = process.env.NODE_ENV === "production";
-    if (isProd && !emailConfigured()) {
-      return NextResponse.json(
-        { message: "Email service is not configured. Please try again later." },
-        { status: 500 }
-      );
     }
 
     const user = await prisma.user.findUnique({
@@ -104,8 +99,6 @@ export async function POST(req: Request) {
     });
 
     // Record attempt (do not block flow if it fails)
-    // NOTE: Prisma client property name is based on model name (PascalCase -> camelCase)
-    // Model: PasswordResetRequestAttempt -> prisma.passwordResetRequestAttempt
     await prisma.passwordResetRequestAttempt
       .create({
         data: {
@@ -129,7 +122,7 @@ export async function POST(req: Request) {
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = sha256Hex(rawToken);
 
-    const minutes = Number.isFinite(RESET_TOKEN_TTL_MINUTES) ? RESET_TOKEN_TTL_MINUTES : 30;
+    const minutes = minutesFromEnv(RESET_TOKEN_TTL_MINUTES, 30);
     const safeMinutes = Math.max(1, Math.min(minutes, 60 * 24)); // clamp 1 min .. 24h
     const expiresAt = new Date(Date.now() + safeMinutes * 60_000);
 
@@ -144,9 +137,24 @@ export async function POST(req: Request) {
     const baseUrl = getBaseUrl(req);
     const resetLink = `${baseUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
 
+    const isProd = process.env.NODE_ENV === "production";
+
+    // Non-prod: return link for easy testing
     if (!isProd) {
       console.log("DEV PASSWORD RESET LINK:", resetLink);
-      return NextResponse.json({ message: neutralOk, devResetLink: resetLink }, { status: 200 });
+      return NextResponse.json(
+        { message: neutralOk, devResetLink: resetLink, devResetUrl: resetLink },
+        { status: 200 }
+      );
+    }
+
+    // Prod: do not block user if email isn't configured
+    if (!emailConfigured()) {
+      console.warn("PASSWORD_RESET_EMAIL_NOT_CONFIGURED: skipping email send", {
+        email,
+        userId: user.id,
+      });
+      return NextResponse.json({ message: neutralOk }, { status: 200 });
     }
 
     try {
@@ -156,17 +164,14 @@ export async function POST(req: Request) {
         html: buildResetHtml({ resetLink, firstName: user.firstName || undefined }),
         text: `Reset your password: ${resetLink}`,
       });
-    } catch (sendErr) {
-      console.error("PASSWORD_RESET_EMAIL_SEND_ERROR:", sendErr);
-      return NextResponse.json(
-        { message: "Email service is not configured. Please try again later." },
-        { status: 500 }
-      );
+    } catch (e: any) {
+      // Do not fail flow if email send fails
+      console.error("PASSWORD_RESET_EMAIL_SEND_FAILED:", e?.name, e?.message || e);
     }
 
     return NextResponse.json({ message: neutralOk }, { status: 200 });
-  } catch (e) {
-    console.error("REQUEST_PASSWORD_RESET_ERROR:", e);
+  } catch (e: any) {
+    console.error("REQUEST_PASSWORD_RESET_ERROR:", e?.name, e?.message || e);
     return NextResponse.json({ message: neutralOk }, { status: 200 });
   }
 }
