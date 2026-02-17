@@ -16,55 +16,14 @@ function toInt(v: string, fallback: number) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-/**
- * Backward compatible:
- * - Keeps SES_FROM_EMAIL support (legacy env naming)
- * - Supports SMTP_FROM_EMAIL / EMAIL_FROM
- * - Falls back to SMTP_USER
- */
 function getDefaultFromEmail() {
+  // Backward compatible + supports better names
   return (
     env("SES_FROM_EMAIL") ||
     env("SMTP_FROM_EMAIL") ||
     env("EMAIL_FROM") ||
     env("SMTP_USER")
   );
-}
-
-/**
- * Optional helper (your build was failing because another file imported this).
- * This lets other routes choose an appropriate "from" address by purpose.
- *
- * Env mapping (you already have these):
- *  - AUTH_FROM_EMAIL
- *  - ADMISSIONS_FROM_EMAIL
- *  - CONTACT_FROM_EMAIL
- *  - NEWSLETTER_FROM_EMAIL
- *
- * Fallback: default from email.
- */
-export function getRoleFromEmail(email: string) {
-  const e = String(email || "").toLowerCase().trim();
-
-  if (e.startsWith("no-reply@")) return "AUTH";
-  if (e.startsWith("admissions@")) return "ADMISSIONS";
-  if (e.startsWith("contact@")) return "CONTACT";
-  if (e.startsWith("study@")) return "NEWSLETTER";
-
-  return "GENERAL";
-}
-
-export function getFromEmailForRole(role: string) {
-  const r = String(role || "").toUpperCase().trim();
-
-  const from =
-    (r === "AUTH" && env("AUTH_FROM_EMAIL")) ||
-    (r === "ADMISSIONS" && env("ADMISSIONS_FROM_EMAIL")) ||
-    (r === "CONTACT" && env("CONTACT_FROM_EMAIL")) ||
-    (r === "NEWSLETTER" && env("NEWSLETTER_FROM_EMAIL")) ||
-    "";
-
-  return from.trim() || getDefaultFromEmail();
 }
 
 export function emailConfigured() {
@@ -79,10 +38,8 @@ export function getTransport() {
   const user = env("SMTP_USER");
   const pass = env("SMTP_PASS");
 
-  // Default 587 (STARTTLS). 465 is implicit TLS.
   const port = toInt(env("SMTP_PORT"), 587);
 
-  // If explicitly set, respect it; otherwise infer from port.
   const secure = env("SMTP_SECURE")
     ? toBool(env("SMTP_SECURE"), port === 465)
     : port === 465;
@@ -97,16 +54,13 @@ export function getTransport() {
     secure,
     auth: { user, pass },
 
-    // Reasonable defaults for serverless
     connectionTimeout: toInt(env("SMTP_CONNECTION_TIMEOUT_MS"), 10_000),
     greetingTimeout: toInt(env("SMTP_GREETING_TIMEOUT_MS"), 10_000),
     socketTimeout: toInt(env("SMTP_SOCKET_TIMEOUT_MS"), 20_000),
 
-    // STARTTLS on 587
     requireTLS: !secure,
 
     tls: {
-      // Keep verification ON by default (safer)
       rejectUnauthorized: env("SMTP_TLS_REJECT_UNAUTHORIZED")
         ? toBool(env("SMTP_TLS_REJECT_UNAUTHORIZED"), true)
         : true,
@@ -119,7 +73,8 @@ export async function sendEmail(opts: {
   subject: string;
   html: string;
   text?: string;
-  from?: string; // optional override
+  from?: string;      // optional override
+  replyTo?: string;   // ✅ allow reply-to (needed by enquiries)
 }) {
   const from = (opts.from ?? "").trim() || getDefaultFromEmail();
   const transporter = getTransport();
@@ -128,11 +83,15 @@ export async function sendEmail(opts: {
     throw new Error("Email FROM address is not configured");
   }
 
+  const replyTo = (opts.replyTo ?? "").trim();
+
   return transporter.sendMail({
     from,
     to: opts.to,
     subject: opts.subject,
     text: opts.text,
     html: opts.html,
+
+    ...(replyTo ? { replyTo } : {}),
   });
 }
