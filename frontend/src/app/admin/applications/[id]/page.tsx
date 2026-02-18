@@ -1,36 +1,13 @@
 // frontend/src/app/admin/applications/[id]/page.tsx
-
 import Link from "next/link";
 import StatusUpdater from "./status-updater";
+import { prisma } from "@/lib/prisma";
+import { requireAdminPage } from "@/lib/admin";
 
-type Attachment = {
-  id: string;
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
-  s3Key?: string | null;
-  createdAt?: string | Date | null;
-};
+export const dynamic = "force-dynamic";
 
-type ApplicationDetail = {
-  id: string;
-  appRef: string;
-  applicationType: "COURSE" | "SCHOLARSHIP" | string;
-  status: string;
-  createdAt: string | Date;
-
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  countryOfResidence: string;
-
-  courseName: string;
-  otherCourseName?: string | null;
-
-  personalStatement: string;
-
-  attachments: Attachment[];
+type PageProps = {
+  params: Promise<{ id: string }>;
 };
 
 function formatDate(d: any) {
@@ -67,29 +44,26 @@ const STATUS_OPTIONS = [
   { value: "GRANTED", label: "Granted (Scholarship final)" },
 ];
 
-type PageProps = {
-  params: Promise<{ id: string }>;
-};
-
-async function getApplication(id: string): Promise<ApplicationDetail | null> {
-  if (!id) return null;
-
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/admin/applications/${encodeURIComponent(id)}`,
-    { cache: "no-store" }
-  ).catch(() => null as any);
-
-  if (!res || !res.ok) return null;
-
-  const json = await res.json().catch(() => ({}));
-  return (json?.application as ApplicationDetail) || null;
-}
-
 export default async function AdminApplicationDetailPage({ params }: PageProps) {
+  const gate = await requireAdminPage();
+  if (!gate.ok) return null;
+
   const { id } = await params;
   const safeId = String(id || "").trim();
 
-  const app = await getApplication(safeId);
+  if (!safeId) {
+    return <p className="p-6 text-sm text-gray-600">Missing application id.</p>;
+  }
+
+  const app = await prisma.application.findUnique({
+    where: { id: safeId },
+    include: {
+      attachments: {
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
   const initialStatus = String(app?.status || "SUBMITTED").toUpperCase();
 
   return (
@@ -99,11 +73,9 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Application</h1>
             <p className="mt-1 text-sm text-gray-700">
-              {!safeId
-                ? "Missing application id."
-                : app
+              {app
                 ? `${app.appRef} — ${humanStatus(app.status)}`
-                : "Application not found (or failed to load)."}
+                : "Application not found."}
             </p>
           </div>
 
@@ -116,18 +88,18 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
         </div>
       </section>
 
-      <section className="mt-6">
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main details */}
-          <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            {!safeId && <p className="text-sm text-gray-600">Missing application id.</p>}
-            {safeId && !app && (
-              <p className="text-sm text-gray-600">
-                No data (not found or failed to load). Please refresh or check the ID.
-              </p>
-            )}
+      {!app && (
+        <section className="p-6">
+          <p className="text-sm text-gray-600">
+            No data found. Please refresh or check the ID.
+          </p>
+        </section>
+      )}
 
-            {app && (
+      {app && (
+        <section className="mt-6">
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <div className="space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
@@ -173,60 +145,54 @@ export default async function AdminApplicationDetailPage({ params }: PageProps) 
                   </div>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* Right rail */}
-          <div className="space-y-6">
-            {/* Status (client component) */}
-            <StatusUpdater
-              id={safeId}
-              disabled={!app || !safeId}
-              initialStatus={initialStatus}
-              options={STATUS_OPTIONS}
-            />
+            <div className="space-y-6">
+              <StatusUpdater
+                id={safeId}
+                disabled={!app}
+                initialStatus={initialStatus}
+                options={STATUS_OPTIONS}
+              />
 
-            {/* Attachments */}
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-              <p className="text-xs font-semibold text-gray-500">ATTACHMENTS</p>
-              <p className="mt-1 text-xs text-gray-500">Download uploaded files (Admin + Super Admin).</p>
+              <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                <p className="text-xs font-semibold text-gray-500">ATTACHMENTS</p>
 
-              <div className="mt-3 space-y-2">
-                {!app && safeId && <p className="text-sm text-gray-600">—</p>}
-                {!safeId && <p className="text-sm text-gray-600">Missing application id.</p>}
-
-                {app && app.attachments?.length === 0 && (
-                  <p className="text-sm text-gray-600">No files uploaded.</p>
+                {app.attachments.length === 0 && (
+                  <p className="mt-3 text-sm text-gray-600">No files uploaded.</p>
                 )}
 
-                {app &&
-                  app.attachments?.map((f) => (
-                    <div
-                      key={f.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-gray-900">{f.fileName}</p>
-                        <p className="text-xs text-gray-600">
-                          {prettyBytes(f.sizeBytes)} • {f.mimeType}
-                        </p>
-                      </div>
-
-                      <a
-                        className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-gray-50"
-                        href={`/api/admin/attachments/${encodeURIComponent(f.id)}/download`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Download
-                      </a>
+                {app.attachments.map((f) => (
+                  <div
+                    key={f.id}
+                    className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-gray-900">
+                        {f.fileName}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {prettyBytes(f.sizeBytes)} • {f.mimeType}
+                      </p>
                     </div>
-                  ))}
+
+                    <a
+                      className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                      href={`/api/admin/applications/${encodeURIComponent(
+                        safeId
+                      )}/attachments/${encodeURIComponent(f.id)}/download`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Download
+                    </a>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
     </main>
   );
 }
