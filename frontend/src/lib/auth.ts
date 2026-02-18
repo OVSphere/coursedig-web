@@ -1,6 +1,4 @@
-// frontend/src/lib/auth.ts
-import "server-only";
-
+//frontend/src/lib/auth.ts
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -17,17 +15,20 @@ function sessionExpiryDate() {
 }
 
 function getCookieDomain(): string | undefined {
-  const d = (process.env.APP_COOKIE_DOMAIN || "").trim();
-  return d ? d : undefined;
+  const raw = (process.env.APP_COOKIE_DOMAIN || "").trim();
+  if (!raw) return undefined;
+
+  // allow "coursedig.com" or ".coursedig.com"
+  return raw.startsWith(".") ? raw : `.${raw}`;
 }
 
-function buildSessionCookieOptions(expires: Date) {
+function buildSessionCookieOptions(expiresAt: Date) {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: "/",
-    expires,
+    expires: expiresAt,
     domain: getCookieDomain(),
   };
 }
@@ -52,7 +53,7 @@ export async function verifyPassword(password: string, hash: string) {
 }
 
 /**
- * ✅ For "secondary admin password" (stored as adminSecondFactorHash).
+ * For "secondary admin password" (stored as adminSecondFactorHash).
  */
 export async function hashAdminSecondFactor(secret: string) {
   return bcrypt.hash(secret, 12);
@@ -70,9 +71,11 @@ export async function createSession(userId: string) {
     select: { id: true, expiresAt: true },
   });
 
-  // ✅ Next.js 16: cookies() is async
+  // ✅ Next.js 16 cookies() is async
   const cookieStore = await cookies();
-  cookieStore.set(
+
+  // Some Next typings can be strict; this keeps runtime correct in Route Handlers.
+  (cookieStore as any).set(
     SESSION_COOKIE_NAME,
     session.id,
     buildSessionCookieOptions(session.expiresAt)
@@ -82,27 +85,25 @@ export async function createSession(userId: string) {
 }
 
 export async function destroySession() {
-  // ✅ Next.js 16: cookies() is async
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  const sessionId = (cookieStore as any).get(SESSION_COOKIE_NAME)?.value as string | undefined;
 
   if (sessionId) {
     await prisma.session.deleteMany({ where: { id: sessionId } });
   }
 
-  cookieStore.set(SESSION_COOKIE_NAME, "", buildClearSessionCookieOptions());
+  (cookieStore as any).set(SESSION_COOKIE_NAME, "", buildClearSessionCookieOptions());
 }
 
 /**
  * Returns the currently logged-in user (or null).
- * ✅ Includes: isSuperAdmin, emailVerifiedAt, hasAdminSecondFactor
- * ✅ Includes identity fields used for auto-fill
- * ❌ Does NOT expose adminSecondFactorHash
+ * Includes: isSuperAdmin, emailVerifiedAt, hasAdminSecondFactor
+ * Includes identity fields used for auto-fill
+ * Does NOT expose adminSecondFactorHash
  */
 export async function getCurrentUser() {
-  // ✅ Next.js 16: cookies() is async
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  const sessionId = (cookieStore as any).get(SESSION_COOKIE_NAME)?.value as string | undefined;
   if (!sessionId) return null;
 
   const session = await prisma.session.findUnique({
@@ -119,8 +120,9 @@ export async function getCurrentUser() {
           emailVerifiedAt: true,
           isAdmin: true,
           isSuperAdmin: true,
-          adminSecondFactorHash: true, // only to compute boolean
+          adminSecondFactorHash: true, // needed only to compute boolean
 
+          // identity/profile fields (nullable for existing rows)
           firstName: true,
           lastName: true,
           phoneNumber: true,
