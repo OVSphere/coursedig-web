@@ -1,4 +1,4 @@
-//frontend/src/app/forgot-password/ForgotPasswordClient.tsx
+// frontend/src/app/forgot-password/ForgotPasswordClient.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -22,7 +22,7 @@ export default function ForgotPasswordClient() {
 
   const [touched, setTouched] = useState(false);
 
-  const emailTrimmed = (email || "").trim();
+  const emailTrimmed = (email || "").trim().toLowerCase();
   const emailValid = isEmailLike(emailTrimmed);
   const emailInvalid = touched && emailTrimmed.length > 0 && !emailValid;
 
@@ -40,6 +40,8 @@ export default function ForgotPasswordClient() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return;
+
     setError(null);
     setMessage(null);
     setTouched(true);
@@ -65,10 +67,16 @@ export default function ForgotPasswordClient() {
         return;
       }
 
+      // Keep response neutral (no account enumeration)
       setMessage(
         json.message ||
           "If an account exists for this email, a password reset link has been sent."
       );
+
+      // Optional: clear the field after success (keeps UX clean)
+      // Comment out if you prefer to keep the email visible.
+      // setEmail("");
+      // setTouched(false);
     } catch (e: any) {
       setError(e?.message || "Request failed.");
     } finally {
@@ -115,6 +123,7 @@ export default function ForgotPasswordClient() {
                 disabled={busy}
                 required
               />
+
               {emailInvalid ? (
                 <p className="mt-2 text-xs text-red-700">Please enter a valid email address.</p>
               ) : (

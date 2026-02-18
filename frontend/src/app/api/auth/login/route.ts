@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { createSession } from "@/lib/auth";
+import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth";
 
 function isEmailLike(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -17,6 +17,11 @@ function normaliseEmail(v: unknown) {
   return String(v ?? "").trim().toLowerCase();
 }
 
+function getCookieDomain() {
+  const d = (process.env.APP_COOKIE_DOMAIN || "").trim();
+  return d ? d : undefined;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -25,7 +30,6 @@ export async function POST(req: Request) {
     const password = String(body.password ?? "");
     const next = safeRedirect(body.next);
 
-    // Basic validation (neutral wording: avoid enumeration)
     if (!isEmailLike(email) || !password) {
       return NextResponse.json(
         { message: "Invalid email or password." },
@@ -33,7 +37,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // IMPORTANT: always lookup by normalised lowercase email
     const user = await prisma.user.findUnique({
       where: { email },
       select: {
@@ -43,7 +46,6 @@ export async function POST(req: Request) {
       },
     });
 
-    // Avoid user enumeration
     if (!user) {
       return NextResponse.json(
         { message: "Invalid email or password." },
@@ -59,11 +61,12 @@ export async function POST(req: Request) {
       );
     }
 
-    // Allow login even if unverified (client can gate restricted routes)
-    await createSession(user.id);
+    // Create session in DB
+    const session = await createSession(user.id);
 
     const verified = !!user.emailVerifiedAt;
 
+    // Build response
     const res = NextResponse.json(
       {
         success: true,
@@ -74,9 +77,17 @@ export async function POST(req: Request) {
       { status: 200 }
     );
 
-    // Let the client know where it wanted to go (optional)
-    res.headers.set("X-Redirect-To", next);
+    // ✅ Explicitly set cookie on this response (prevents host/subdomain weirdness)
+    res.cookies.set(SESSION_COOKIE_NAME, session.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      expires: session.expiresAt,
+      ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
+    });
 
+    res.headers.set("X-Redirect-To", next);
     return res;
   } catch (e: any) {
     console.error("LOGIN_ERROR:", e?.name, e?.message || e);

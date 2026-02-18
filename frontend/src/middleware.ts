@@ -29,28 +29,27 @@ function isProtectedPath(pathname: string) {
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  // Not protected → allow
   if (!isProtectedPath(pathname)) {
     return NextResponse.next();
   }
 
   const sessionId = req.cookies.get(SESSION_COOKIE)?.value;
 
-  // ❌ No session
   if (!sessionId || sessionId.trim().length === 0) {
-    // APIs → JSON 401
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ message: "Unauthorised" }, { status: 401 });
     }
 
-    // UI → redirect to login
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = "/login";
-    loginUrl.searchParams.set("next", pathname + search);
+
+    // ✅ Preserve the full requested path, including query string
+    const requested = `${pathname}${search || ""}`;
+    loginUrl.searchParams.set("next", requested);
+
     return NextResponse.redirect(loginUrl);
   }
 
-  // ✅ Session exists (verification/admin enforced at route level)
   return NextResponse.next();
 }
 

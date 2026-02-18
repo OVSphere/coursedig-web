@@ -1,4 +1,6 @@
 // frontend/src/lib/auth.ts
+import "server-only";
+
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -8,10 +10,29 @@ export const SESSION_COOKIE_NAME =
 
 const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS ?? 14);
 
+/**
+ * ✅ Optional: set this in production to share auth across subdomains
+ * e.g. APP_COOKIE_DOMAIN=.coursedig.com
+ *
+ * If not set, we keep cookies host-only (safe default).
+ */
+const COOKIE_DOMAIN = (process.env.APP_COOKIE_DOMAIN || "").trim() || undefined;
+
 function sessionExpiryDate() {
   const d = new Date();
   d.setDate(d.getDate() + (Number.isFinite(SESSION_TTL_DAYS) ? SESSION_TTL_DAYS : 14));
   return d;
+}
+
+function buildSessionCookieOptions(expires: Date) {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    expires,
+    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
+  };
 }
 
 export function buildClearSessionCookieOptions() {
@@ -21,6 +42,7 @@ export function buildClearSessionCookieOptions() {
     sameSite: "lax" as const,
     path: "/",
     expires: new Date(0),
+    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
   };
 }
 
@@ -51,20 +73,14 @@ export async function createSession(userId: string) {
     select: { id: true, expiresAt: true },
   });
 
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, session.id, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    expires: session.expiresAt,
-  });
+  const cookieStore = cookies();
+  cookieStore.set(SESSION_COOKIE_NAME, session.id, buildSessionCookieOptions(session.expiresAt));
 
   return session;
 }
 
 export async function destroySession() {
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
   if (sessionId) {
@@ -77,11 +93,11 @@ export async function destroySession() {
 /**
  * Returns the currently logged-in user (or null).
  * ✅ Includes: isSuperAdmin, emailVerifiedAt, hasAdminSecondFactor
- * ✅ CHANGE (CourseDig): includes identity fields used for auto-fill
+ * ✅ Includes identity fields used for auto-fill
  * ❌ Does NOT expose adminSecondFactorHash
  */
 export async function getCurrentUser() {
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!sessionId) return null;
 
@@ -99,9 +115,8 @@ export async function getCurrentUser() {
           emailVerifiedAt: true,
           isAdmin: true,
           isSuperAdmin: true,
-          adminSecondFactorHash: true, // needed only to compute boolean
+          adminSecondFactorHash: true,
 
-          // ✅ CHANGE (CourseDig): new identity/profile fields (nullable for existing rows)
           firstName: true,
           lastName: true,
           phoneNumber: true,
@@ -121,7 +136,6 @@ export async function getCurrentUser() {
 
   const u = session.user;
 
-  // return a safe shape
   return {
     id: u.id,
     email: u.email,
@@ -132,7 +146,6 @@ export async function getCurrentUser() {
     isSuperAdmin: u.isSuperAdmin,
     hasAdminSecondFactor: !!u.adminSecondFactorHash,
 
-    // ✅ CHANGE (CourseDig): expose identity fields to server routes (safe)
     firstName: u.firstName ?? null,
     lastName: u.lastName ?? null,
     phoneNumber: u.phoneNumber ?? null,

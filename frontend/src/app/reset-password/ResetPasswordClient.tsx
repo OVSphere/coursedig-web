@@ -1,10 +1,9 @@
-//frontend/src/app/reset-password/ResetPasswordClient.tsx
+// frontend/src/app/reset-password/ResetPasswordClient.tsx
 "use client";
 
 import { useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import TurnstileWidget from "@/app/components/TurnstileWidget";
 
 export default function ResetPasswordClient() {
   const sp = useSearchParams();
@@ -15,7 +14,6 @@ export default function ResetPasswordClient() {
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [captchaToken, setCaptchaToken] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +22,13 @@ export default function ResetPasswordClient() {
     "mt-2 w-full rounded-md border border-gray-300 bg-white text-gray-900 " +
     "placeholder-gray-400 px-4 py-3 text-sm outline-none " +
     "focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]";
+
+  const canSubmit =
+    !busy &&
+    !!token &&
+    password.length >= 8 &&
+    confirm.length >= 8 &&
+    password === confirm;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -47,17 +52,26 @@ export default function ResetPasswordClient() {
       const res = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password, captchaToken }),
+        body: JSON.stringify({ token, password }),
       });
 
       const json = await res.json().catch(() => ({}));
+
       if (!res.ok) {
         setError(json.message || "Password reset failed.");
         return;
       }
 
       const email = String(json.email ?? "");
-      router.push(`/login?next=${encodeURIComponent(next)}&email=${encodeURIComponent(email)}`);
+
+      // Hard nav ensures the user lands cleanly (cookie + middleware stability)
+      const to = `/login?next=${encodeURIComponent(next)}&email=${encodeURIComponent(email)}`;
+      if (typeof window !== "undefined") {
+        window.location.assign(to);
+      } else {
+        router.push(to);
+        router.refresh();
+      }
     } catch (e: any) {
       setError(e?.message || "Password reset failed.");
     } finally {
@@ -71,6 +85,12 @@ export default function ResetPasswordClient() {
         <div className="rounded-3xl border border-gray-200 bg-white p-7 shadow-sm">
           <h1 className="text-2xl font-bold text-gray-900">Reset password</h1>
           <p className="mt-1 text-sm text-gray-600">Choose a new password for your account.</p>
+
+          {!token ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              This reset link is missing a token. Please request a new password reset link.
+            </div>
+          ) : null}
 
           {error && (
             <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -88,7 +108,13 @@ export default function ResetPasswordClient() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="At least 8 characters"
                 autoComplete="new-password"
+                disabled={busy}
               />
+              {password.length > 0 && password.length < 8 ? (
+                <p className="mt-2 text-xs text-red-700">Minimum 8 characters.</p>
+              ) : (
+                <p className="mt-2 text-xs text-gray-500">Use at least 8 characters.</p>
+              )}
             </div>
 
             <div>
@@ -100,21 +126,20 @@ export default function ResetPasswordClient() {
                 onChange={(e) => setConfirm(e.target.value)}
                 placeholder="Re-enter new password"
                 autoComplete="new-password"
+                disabled={busy}
               />
-            </div>
-
-            <div className="pt-1">
-              <TurnstileWidget onToken={setCaptchaToken} theme="light" />
-              <p className="mt-2 text-xs text-gray-500">
-                Please complete the captcha to continue.
-              </p>
+              {confirm.length > 0 && password !== confirm ? (
+                <p className="mt-2 text-xs text-red-700">Passwords do not match.</p>
+              ) : (
+                <p className="mt-2 text-xs text-gray-500">Re-enter to confirm.</p>
+              )}
             </div>
 
             <button
               type="submit"
-              disabled={busy || !captchaToken}
+              disabled={!canSubmit}
               className={`w-full rounded-md px-6 py-3 text-sm font-semibold text-white ${
-                busy || !captchaToken
+                !canSubmit
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-[color:var(--color-brand)] hover:bg-[color:var(--color-brand-dark)]"
               }`}

@@ -1,4 +1,4 @@
-//frontend/src/app/api/auth/reset-password/route.ts
+// frontend/src/app/api/auth/reset-password/route.ts
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
@@ -9,7 +9,7 @@ function sha256Hex(input: string) {
 }
 
 function validPassword(pw: string) {
-  return pw.length >= 8 && pw.length <= 200;
+  return typeof pw === "string" && pw.length >= 8 && pw.length <= 200;
 }
 
 export const dynamic = "force-dynamic";
@@ -45,7 +45,10 @@ export async function POST(req: Request) {
       },
     });
 
-    if (!rec || rec.usedAt || rec.expiresAt.getTime() < Date.now()) {
+    const expired =
+      !rec?.expiresAt || rec.expiresAt.getTime() < Date.now();
+
+    if (!rec || rec.usedAt || expired) {
       return NextResponse.json(
         { message: "This reset link is invalid or has expired." },
         { status: 400 }
@@ -71,7 +74,10 @@ export async function POST(req: Request) {
       }),
     ]);
 
-    return NextResponse.json({ success: true, email: rec.user.email }, { status: 200 });
+    return NextResponse.json(
+      { success: true, email: rec.user.email },
+      { status: 200 }
+    );
   } catch (e) {
     console.error("RESET_PASSWORD_ERROR:", e);
     return NextResponse.json({ message: "Password reset failed." }, { status: 500 });

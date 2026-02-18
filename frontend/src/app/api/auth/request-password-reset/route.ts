@@ -8,7 +8,8 @@ function isEmailLike(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-const RESET_TOKEN_TTL_MINUTES = Number(process.env.RESET_TOKEN_TTL_MINUTES ?? 30);
+// ✅ Default to 10 minutes (can still be overridden by env)
+const RESET_TOKEN_TTL_MINUTES = Number(process.env.RESET_TOKEN_TTL_MINUTES ?? 10);
 
 function sha256Hex(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex");
@@ -122,8 +123,9 @@ export async function POST(req: Request) {
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = sha256Hex(rawToken);
 
-    const minutes = minutesFromEnv(RESET_TOKEN_TTL_MINUTES, 30);
-    const safeMinutes = Math.max(1, Math.min(minutes, 60 * 24)); // clamp 1 min .. 24h
+    // ✅ Default is now 10 minutes; still clamped safely
+    const minutes = minutesFromEnv(RESET_TOKEN_TTL_MINUTES, 10);
+    const safeMinutes = Math.max(1, Math.min(minutes, 60 * 24)); // 1 min .. 24h
     const expiresAt = new Date(Date.now() + safeMinutes * 60_000);
 
     await prisma.passwordResetToken.create({

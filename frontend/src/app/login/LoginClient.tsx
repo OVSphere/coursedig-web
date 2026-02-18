@@ -9,6 +9,12 @@ function normaliseEmail(v: string) {
   return (v || "").trim().toLowerCase();
 }
 
+function isEmailLike(v: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((v || "").trim());
+}
+
+type NoticeKind = "error" | "info" | "success";
+
 export default function LoginClient() {
   const router = useRouter();
   const params = useSearchParams();
@@ -19,22 +25,40 @@ export default function LoginClient() {
   const [email, setEmail] = useState(emailPrefill);
   const [password, setPassword] = useState("");
 
-  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ kind: NoticeKind; text: string } | null>(null);
   const [needsVerify, setNeedsVerify] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const emailNorm = normaliseEmail(email || emailPrefill);
+  const emailValid = isEmailLike(emailNorm);
 
   const inputClass =
     "mt-2 w-full rounded-md border border-gray-300 bg-white text-gray-900 " +
     "placeholder-gray-400 px-4 py-3 text-sm outline-none " +
     "focus:border-[color:var(--color-brand)] focus:ring-2 focus:ring-[color:var(--color-brand-soft)]";
 
+  function noticeBox() {
+    if (!notice) return null;
+
+    const cls =
+      notice.kind === "success"
+        ? "border-green-200 bg-green-50 text-green-800"
+        : notice.kind === "info"
+        ? "border-blue-200 bg-blue-50 text-blue-800"
+        : "border-red-200 bg-red-50 text-red-700";
+
+    return (
+      <div className={`mb-4 rounded-xl border p-3 text-sm ${cls}`}>
+        {notice.text}
+      </div>
+    );
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    setNotice(null);
     setNeedsVerify(false);
     setBusy(true);
-
-    const emailNorm = normaliseEmail(email);
 
     try {
       const res = await fetch("/api/auth/login", {
@@ -46,8 +70,9 @@ export default function LoginClient() {
       const json: any = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setError(json.message || "Login failed.");
-        // Support both old + new API behaviours
+        const msg = json.message || "Login failed.";
+        setNotice({ kind: "error", text: msg });
+
         if (
           res.status === 403 ||
           json.code === "EMAIL_NOT_VERIFIED" ||
@@ -58,34 +83,44 @@ export default function LoginClient() {
         return;
       }
 
-      // New API shape supports these flags
       if (json?.requiresVerification) {
         setNeedsVerify(true);
       }
 
-      // Prefer server-provided redirect if present
       const headerNext = res.headers.get("X-Redirect-To");
       const redirectTo =
         (typeof json?.next === "string" && json.next) ||
         (typeof headerNext === "string" && headerNext) ||
         next;
 
-      router.push(redirectTo);
-      router.refresh();
+      /**
+       * ✅ IMPORTANT:
+       * Use a hard navigation so the very next request definitely carries the new session cookie
+       * before middleware runs (prevents “logged in but redirected to login again” loops).
+       */
+      if (typeof window !== "undefined") {
+        window.location.assign(redirectTo);
+      } else {
+        router.push(redirectTo);
+        router.refresh();
+      }
     } catch (e: any) {
-      setError(e?.message || "Login failed.");
+      setNotice({ kind: "error", text: e?.message || "Login failed." });
     } finally {
       setBusy(false);
     }
   }
 
   async function resendVerification() {
-    setError(null);
+    setNotice(null);
     setBusy(true);
 
-    const emailNorm = normaliseEmail(email || emailPrefill);
-
     try {
+      if (!emailValid) {
+        setNotice({ kind: "error", text: "Please enter a valid email address first." });
+        return;
+      }
+
       const res = await fetch("/api/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -95,9 +130,9 @@ export default function LoginClient() {
       const json: any = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.message || "Failed to resend verification email.");
 
-      setError(json.message || "Verification email sent.");
+      setNotice({ kind: "success", text: json.message || "Verification email sent." });
     } catch (e: any) {
-      setError(e?.message || "Failed to resend verification email.");
+      setNotice({ kind: "error", text: e?.message || "Failed to resend verification email." });
     } finally {
       setBusy(false);
     }
@@ -146,7 +181,9 @@ export default function LoginClient() {
                 </div>
 
                 <div className="rounded-2xl border border-red-100 bg-white/70 p-5">
-                  <p className="text-sm font-semibold text-gray-900">Need help choosing the right pathway?</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    Need help choosing the right pathway?
+                  </p>
                   <p className="mt-1 text-sm text-gray-700">
                     Tell us your background and goals, we’ll recommend the best route for you.
                   </p>
@@ -173,11 +210,7 @@ export default function LoginClient() {
                 <p className="mt-1 text-sm text-gray-600">Use your email and password to continue.</p>
               </div>
 
-              {error && (
-                <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                  {error}
-                </div>
-              )}
+              {noticeBox()}
 
               {needsVerify && (
                 <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
@@ -191,7 +224,11 @@ export default function LoginClient() {
                   <input
                     className={inputClass}
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setNotice(null);
+                      setNeedsVerify(false);
+                    }}
                     placeholder="you@example.com"
                     inputMode="email"
                     autoComplete="email"
@@ -212,9 +249,7 @@ export default function LoginClient() {
 
                 <div className="flex items-center justify-end">
                   <Link
-                    href={`/forgot-password?email=${encodeURIComponent(
-                      normaliseEmail(email || emailPrefill)
-                    )}&next=${encodeURIComponent(next)}`}
+                    href={`/forgot-password?email=${encodeURIComponent(emailNorm)}&next=${encodeURIComponent(next)}`}
                     className="text-sm font-semibold text-[color:var(--color-brand)] hover:underline"
                   >
                     Forgot password?
@@ -233,12 +268,16 @@ export default function LoginClient() {
                   {busy ? "Signing in…" : "Login"}
                 </button>
 
-                {(needsVerify || !!email) && (
+                {(needsVerify || email.trim().length > 0 || emailPrefill.trim().length > 0) && (
                   <button
                     type="button"
                     onClick={resendVerification}
-                    disabled={busy || !normaliseEmail(email || emailPrefill)}
-                    className="w-full rounded-md border border-gray-300 bg-white px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    disabled={busy || !emailValid}
+                    className={`w-full rounded-md border px-6 py-3 text-sm font-semibold ${
+                      busy || !emailValid
+                        ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-500"
+                        : "border-gray-300 bg-white text-gray-900 hover:bg-gray-50"
+                    }`}
                   >
                     Resend verification email
                   </button>
