@@ -4,7 +4,6 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import TurnstileWidget from "@/app/components/TurnstileWidget";
 
 function isEmailLike(v: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((v || "").trim());
@@ -16,8 +15,6 @@ export default function ForgotPasswordClient() {
   const emailPrefill = useMemo(() => sp.get("email") || "", [sp]);
 
   const [email, setEmail] = useState(emailPrefill);
-  const [captchaToken, setCaptchaToken] = useState("");
-  const [resetSignal, setResetSignal] = useState(0);
 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -29,7 +26,7 @@ export default function ForgotPasswordClient() {
   const emailValid = isEmailLike(emailTrimmed);
   const emailInvalid = touched && emailTrimmed.length > 0 && !emailValid;
 
-  const canSubmit = !busy && emailValid && !!captchaToken;
+  const canSubmit = !busy && emailValid;
 
   const inputClass =
     "mt-2 w-full rounded-md border border-gray-300 bg-white text-gray-900 " +
@@ -52,28 +49,19 @@ export default function ForgotPasswordClient() {
       return;
     }
 
-    if (!captchaToken) {
-      setError("Please complete the captcha to continue.");
-      return;
-    }
-
     setBusy(true);
 
     try {
       const res = await fetch("/api/auth/request-password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailTrimmed, captchaToken }),
+        body: JSON.stringify({ email: emailTrimmed }),
       });
 
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setError(json.message || "Request failed.");
-
-        // Prevent stale/expired token loops
-        setCaptchaToken("");
-        setResetSignal((n) => n + 1);
         return;
       }
 
@@ -81,14 +69,8 @@ export default function ForgotPasswordClient() {
         json.message ||
           "If an account exists for this email, a password reset link has been sent."
       );
-
-      // Clear + reset captcha after success too (one-time token)
-      setCaptchaToken("");
-      setResetSignal((n) => n + 1);
     } catch (e: any) {
       setError(e?.message || "Request failed.");
-      setCaptchaToken("");
-      setResetSignal((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -142,19 +124,6 @@ export default function ForgotPasswordClient() {
               )}
             </div>
 
-            <div className="pt-1">
-              <TurnstileWidget
-                onToken={setCaptchaToken}
-                theme="light"
-                resetSignal={resetSignal}
-                appearance="always"
-                action="forgot_password"
-              />
-              <p className="mt-2 text-xs text-gray-500">
-                Please complete the captcha to continue.
-              </p>
-            </div>
-
             <button
               type="submit"
               disabled={!canSubmit}
@@ -168,9 +137,7 @@ export default function ForgotPasswordClient() {
             </button>
 
             {!canSubmit ? (
-              <p className="text-xs text-gray-500">
-                Enter a valid email address and complete the captcha to enable submission.
-              </p>
+              <p className="text-xs text-gray-500">Enter a valid email address to enable submission.</p>
             ) : null}
 
             <div className="flex items-center justify-between text-sm">
