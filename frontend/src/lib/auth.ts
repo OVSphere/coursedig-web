@@ -73,7 +73,7 @@ export async function createSession(userId: string) {
     select: { id: true, expiresAt: true },
   });
 
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, session.id, buildSessionCookieOptions(session.expiresAt));
 
   return session;
