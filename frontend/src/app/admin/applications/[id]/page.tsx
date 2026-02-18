@@ -1,8 +1,9 @@
 // frontend/src/app/admin/applications/[id]/page.tsx
+
 import Link from "next/link";
 import StatusUpdater from "./status-updater";
 import { prisma } from "@/lib/prisma";
-import { requireAdminPage } from "@/lib/admin";
+import { requireAdmin } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default async function AdminApplicationDetailPage({ params }: PageProps) {
-  const gate = await requireAdminPage();
+  const gate = await requireAdmin();
   if (!gate.ok) return null;
 
   const { id } = await params;
