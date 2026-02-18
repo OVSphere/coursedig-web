@@ -10,18 +10,15 @@ export const SESSION_COOKIE_NAME =
 
 const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS ?? 14);
 
-/**
- * ✅ Optional: set this in production to share auth across subdomains
- * e.g. APP_COOKIE_DOMAIN=.coursedig.com
- *
- * If not set, we keep cookies host-only (safe default).
- */
-const COOKIE_DOMAIN = (process.env.APP_COOKIE_DOMAIN || "").trim() || undefined;
-
 function sessionExpiryDate() {
   const d = new Date();
   d.setDate(d.getDate() + (Number.isFinite(SESSION_TTL_DAYS) ? SESSION_TTL_DAYS : 14));
   return d;
+}
+
+function getCookieDomain(): string | undefined {
+  const d = (process.env.APP_COOKIE_DOMAIN || "").trim();
+  return d ? d : undefined;
 }
 
 function buildSessionCookieOptions(expires: Date) {
@@ -31,7 +28,7 @@ function buildSessionCookieOptions(expires: Date) {
     sameSite: "lax" as const,
     path: "/",
     expires,
-    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
+    domain: getCookieDomain(),
   };
 }
 
@@ -42,7 +39,7 @@ export function buildClearSessionCookieOptions() {
     sameSite: "lax" as const,
     path: "/",
     expires: new Date(0),
-    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
+    domain: getCookieDomain(),
   };
 }
 
@@ -73,14 +70,20 @@ export async function createSession(userId: string) {
     select: { id: true, expiresAt: true },
   });
 
+  // ✅ Next.js 16: cookies() is async
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, session.id, buildSessionCookieOptions(session.expiresAt));
+  cookieStore.set(
+    SESSION_COOKIE_NAME,
+    session.id,
+    buildSessionCookieOptions(session.expiresAt)
+  );
 
   return session;
 }
 
 export async function destroySession() {
-  const cookieStore = cookies();
+  // ✅ Next.js 16: cookies() is async
+  const cookieStore = await cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
   if (sessionId) {
@@ -97,7 +100,8 @@ export async function destroySession() {
  * ❌ Does NOT expose adminSecondFactorHash
  */
 export async function getCurrentUser() {
-  const cookieStore = cookies();
+  // ✅ Next.js 16: cookies() is async
+  const cookieStore = await cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!sessionId) return null;
 
@@ -115,7 +119,7 @@ export async function getCurrentUser() {
           emailVerifiedAt: true,
           isAdmin: true,
           isSuperAdmin: true,
-          adminSecondFactorHash: true,
+          adminSecondFactorHash: true, // only to compute boolean
 
           firstName: true,
           lastName: true,
